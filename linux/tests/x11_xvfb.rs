@@ -23,7 +23,7 @@ fn run_xdotool(args: &[&str]) {
 
 #[test]
 fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
-    // Generate a two-group map. It is loaded onto the XI2 master keyboard
+    // Generate a two-group map. It is loaded onto the XI2 source keyboard
     // after the first event reveals the actual device ID used by Xvfb.
     let map = Command::new("setxkbmap")
         .args(["-layout", "us,ir", "-option", "", "-print"])
@@ -60,12 +60,12 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut saw_shifted_a_press = false;
     let mut saw_a_release = false;
-    let mut master_keyboard_id = None;
+    let mut source_keyboard_id = None;
     while Instant::now() < deadline && !(saw_shifted_a_press && saw_a_release) {
         if let Some(event) = connection.poll_for_event().unwrap() {
             match event {
                 Event::XinputKeyPress(e) if e.detail == 38 => {
-                    master_keyboard_id = Some(e.deviceid);
+                    source_keyboard_id = Some(e.sourceid);
                     saw_shifted_a_press |= e.mods.effective & 1 != 0 && e.group.effective == 0;
                 }
                 Event::XinputKeyRelease(e) if e.detail == 38 => {
@@ -80,10 +80,10 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     assert!(saw_shifted_a_press, "XI2 did not deliver Shift+A with effective Shift modifier and group 0");
     assert!(saw_a_release, "XI2 did not deliver A release with group 0");
 
-    let master_keyboard_id = master_keyboard_id.expect("XI2 key event exposed master keyboard ID");
+    let source_keyboard_id = source_keyboard_id.expect("XI2 key event exposed source keyboard ID");
     let display = std::env::var("DISPLAY").expect("Xvfb DISPLAY is set");
     let mut loader = Command::new("xkbcomp")
-        .args(["-w", "0", "-i", &master_keyboard_id.to_string(), "-", &display])
+        .args(["-w", "0", "-i", &source_keyboard_id.to_string(), "-", &display])
         .stdin(Stdio::piped())
         .spawn()
         .expect("xkbcomp installed");
@@ -93,8 +93,8 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
 
     // Lock the same master keyboard into group 1 through the XKB protocol.
     // This is deterministic test setup, not a production layout-switch feature.
-    let state_before = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
-    eprintln!("XKB group before lock on XI2 device {}: {:?}", master_keyboard_id, state_before.group);
+    let state_before = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
+    eprintln!("XKB group before lock on XI2 source device {}: {:?}", master_keyboard_id, state_before.group);
     connection.xkb_latch_lock_state(
         u16::from(master_keyboard_id),
         x11rb::protocol::xproto::ModMask::from(0u16),
