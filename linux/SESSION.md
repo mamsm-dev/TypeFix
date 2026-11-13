@@ -1,6 +1,6 @@
 # Linux typing session state
 
-The Linux core includes a backend-neutral `TypingSession` state machine. It mirrors relevant Windows behavior without depending on Win32 APIs:
+The Linux core includes a backend-neutral `TypingSession` state machine:
 
 - Collect text as produced by the active layout and evaluate a word at a space boundary.
 - Preserve a pending wrong-layout run so subsequent words can be included.
@@ -26,11 +26,11 @@ A complete desktop adapter must:
 3. Forward focus changes, navigation, pointer clicks, shortcuts, and cancellation as reset events.
 4. Keep typed text only in memory; do not log, persist, or transmit it.
 5. Show suggestions only in supported contexts and fail closed when a secure-input state is exposed.
-6. On Tab acceptance, perform replacement in the focused application and handle Unicode grapheme boundaries correctly. The core's Unicode-scalar deletion count is not yet a complete injection contract.
+6. On Tab acceptance, perform replacement in the focused application and handle Unicode grapheme boundaries correctly. The core's Unicode-scalar deletion count is not yet a complete replacement contract.
 7. Keep capture and replacement inside the unprivileged user's graphical session. Never access raw evdev devices, install a root service, or use uinput.
 
 ## Current boundary
 
-The X11 layer now has an opt-in XI2 device-event path that receives modifier/group snapshots from the server. It still does not decode text, process compose/dead-key sequences, detect focus changes reliably, display a tray icon or popup, or inject replacement text. The XKB compiler rebuilds from RMLVO configuration returned by `setxkbmap -query`; custom server-side keymap modifications may not be represented exactly. Device-event propagation and modifier/group correctness still need Xvfb and real desktop smoke tests before text decoding can be enabled.
+The X11 layer now has an opt-in XI2 device-event path that receives modifier/group snapshots from the server. It still does not decode text, process compose/dead-key sequences, detect focus changes reliably, display a tray icon or popup, or replace text. The XKB compiler rebuilds from RMLVO configuration returned by `setxkbmap -query`; custom server-side keymap modifications may not be represented exactly. Device-event propagation and modifier/group correctness still need Xvfb and real desktop smoke tests before text decoding can be enabled.
 
 X11 clients with access to the same X server do not have strong per-application input isolation. Reliable password-field detection must not be claimed. Users who require stronger isolation should disable X11 event observation; Wayland remains planned through IBus input-method integration.
