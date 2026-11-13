@@ -13,4 +13,10 @@ path = "src/lib.rs"
 name = "typefix-check"
 path = "src/main.rs"
 
+[[bin]]
+name = "typefix-x11-probe"
+path = "src/bin/x11_probe.rs"
+
 [dependencies]
+x11rb = "0.13"
+xkbcommon = "0.9"
