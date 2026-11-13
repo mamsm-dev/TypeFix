@@ -69,10 +69,12 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut saw_shifted_a_press = false;
     let mut saw_a_release = false;
+    let mut master_keyboard_id = None;
     while Instant::now() < deadline && !(saw_shifted_a_press && saw_a_release) {
         if let Some(event) = connection.poll_for_event().unwrap() {
             match event {
                 Event::XinputKeyPress(e) if e.detail == 38 => {
+                    master_keyboard_id = Some(e.deviceid);
                     saw_shifted_a_press |= e.mods.effective & 1 != 0 && e.group.effective == 0;
                 }
                 Event::XinputKeyRelease(e) if e.detail == 38 => {
@@ -89,8 +91,11 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
 
     // Lock the server's core keyboard into group 1 through the XKB protocol.
     // This is deterministic test setup, not a production layout-switch feature.
+    let master_keyboard_id = master_keyboard_id.expect("XI2 key event exposed master keyboard ID");
+    let state_before = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
+    eprintln!("XKB group before lock on XI2 device {}: {}", master_keyboard_id, state_before.group);
     connection.xkb_latch_lock_state(
-        u16::from(ID::USE_CORE_KBD),
+        u16::from(master_keyboard_id),
         x11rb::protocol::xproto::ModMask::from(0u16),
         x11rb::protocol::xproto::ModMask::from(0u16),
         true,
@@ -100,6 +105,8 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
         0u16,
     ).unwrap().check().unwrap();
     connection.flush().unwrap();
+    let state_after = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
+    eprintln!("XKB group after lock on XI2 device {}: {}", master_keyboard_id, state_after.group);
     run_xdotool(&["key", "a"]);
 
     let deadline = Instant::now() + Duration::from_secs(5);
