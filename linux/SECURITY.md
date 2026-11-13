@@ -4,7 +4,7 @@ TypeFix needs access to text as it is entered to recognize a wrong keyboard layo
 
 ## X11
 
-The X11 session backend is a user process, not a root service. X11 does not provide strong per-application input isolation: a client with access to the X server may be able to observe keystrokes from other clients. TypeFix must therefore keep its buffer in memory only, avoid logging typed text, and provide an immediate pause/quit control. Users who require strict isolation should disable the X11 backend.
+The current X11 layer only opens a connection as the desktop user, checks XI2 availability, and compiles configured XKB layout metadata. It does not yet subscribe to key events or inject text. Any future event listener will be a user process, not a root service. X11 does not provide strong per-application input isolation: a client with access to the X server may be able to observe keystrokes from other clients. A future listener must keep its buffer in memory only, avoid logging typed text, and provide an immediate pause/quit control. Reliable password-field detection is not available; users who require strict isolation should disable the X11 event backend.
 
 ## Wayland
 
