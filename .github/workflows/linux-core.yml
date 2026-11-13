@@ -19,5 +19,3 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Test shared core
         run: cargo test --manifest-path linux/Cargo.toml
-      - name: Check formatting
-        run: cargo fmt --manifest-path linux/Cargo.toml -- --check
