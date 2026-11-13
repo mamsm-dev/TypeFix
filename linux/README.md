@@ -10,7 +10,7 @@ Targets: KDE Plasma, GNOME, and XFCE. Desktop detection is informational only; t
 
 ### X11
 
-The X11 backend will run as a per-user process in the graphical session. It will use the X server for key events and text injection, and must not require a root daemon or read raw evdev devices. It must detect unavailable permissions or unsupported sessions and fail closed.
+The X11 work currently provides an unprivileged X-server connection/XInput2 preflight and XKB keymap compiler. It reads the configured layout names through `setxkbmap -query` and can translate X11 keycodes by layout group; it does not yet subscribe to keyboard events or inject text. Run `cargo run --manifest-path linux/Cargo.toml --bin typefix-x11-probe` inside an X11 session to check the prerequisites. The eventual event adapter must remain a per-user process and must not require a root daemon or raw evdev access.
 
 ### Wayland
 
@@ -29,7 +29,7 @@ This means Wayland support depends on the active input method and applications a
 
 ## Implementation status
 
-The shared detector and a backend-neutral typing-session state machine are implemented and covered by Rust unit tests. The state machine handles word boundaries, pending suggestion runs, Tab acceptance decisions, and privacy resets. It is not an X11 event listener: XInput2 subscription, XKB keymap discovery, popup/tray UI, and text replacement are still pending. See [SESSION.md](SESSION.md) for the adapter contract and exact boundary.
+The shared detector, backend-neutral typing-session state machine, and first X11 integration layer are implemented. The X11 layer connects as the current user, negotiates XI2, reads the configured XKB RMLVO names, and compiles layout groups with libxkbcommon. It includes a probe command and tests for US/Persian keycode translation. It is not yet a keyboard event listener: XI2 event subscription, live modifier/group tracking, compose sequences, popup/tray UI, and text replacement are still pending. See [SESSION.md](SESSION.md) for the adapter contract and exact boundary.
 
 ## Shared behavior
 
