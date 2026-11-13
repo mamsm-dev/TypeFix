@@ -27,6 +27,10 @@ This means Wayland support depends on the active input method and applications a
 - Do not claim arbitrary password fields can be detected reliably. The input-method backend must avoid suggestions in secure input contexts where the platform exposes that state; unsupported contexts must fail closed.
 - Document each backend's actual visibility and limitations before enabling it.
 
+## Implementation status
+
+The shared detector and a backend-neutral typing-session state machine are implemented and covered by Rust unit tests. The state machine handles word boundaries, pending suggestion runs, Tab acceptance decisions, and privacy resets. It is not an X11 event listener: XInput2 subscription, XKB keymap discovery, popup/tray UI, and text replacement are still pending. See [SESSION.md](SESSION.md) for the adapter contract and exact boundary.
+
 ## Shared behavior
 
 Reuse the bundled English/Persian word lists and detection rules from the Windows implementation. Layout conversion must use the active XKB keymap, not a hard-coded US mapping, so Persian and non-US layouts work correctly.
