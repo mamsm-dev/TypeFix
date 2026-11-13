@@ -31,6 +31,6 @@ A complete desktop adapter must:
 
 ## Current boundary
 
-The X11 layer now has an opt-in XI2 device-event path that receives modifier/group snapshots from the server. It still does not decode text, process compose/dead-key sequences, detect focus changes reliably, display a tray icon or popup, or replace text. The XKB compiler rebuilds from RMLVO configuration returned by `setxkbmap -query`; custom server-side keymap modifications may not be represented exactly. Device-event propagation and modifier/group correctness still need Xvfb and real desktop smoke tests before text decoding can be enabled.
+The X11 layer now has an opt-in XI2 device-event path that receives modifier/group snapshots from the server. The isolated Xvfb integration test verifies delivery of key press/release events and checks the effective Shift modifier and group 0 snapshot. It does not validate every keyboard layout or a real desktop compositor/session. The implementation still does not decode text, process compose/dead-key sequences, detect focus changes reliably, display a tray icon or popup, or replace text. The XKB compiler rebuilds from RMLVO configuration returned by `setxkbmap -query`; custom server-side keymap modifications may not be represented exactly.
 
 X11 clients with access to the same X server do not have strong per-application input isolation. Reliable password-field detection must not be claimed. Users who require stronger isolation should disable X11 event observation; Wayland remains planned through IBus input-method integration.
