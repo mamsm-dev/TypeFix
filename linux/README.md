@@ -48,8 +48,9 @@ All packages must contain the same tested Linux build. Enable AppImage, Debian, 
 
 ## Milestones
 
-1. Shared detection core and XKB layout conversion, with automated tests.
-2. X11 session backend and desktop-session smoke tests.
-3. IBus Wayland integration; validate GNOME, KDE Plasma, and XFCE configurations.
-4. Fcitx5 compatibility and documented limitations.
-5. Build and test all four Linux release formats, then add them to the tag release workflow.
+1. Shared detection core and backend-neutral typing-session state machine.
+2. X11 connection/XInput2 capability preflight and XKB layout-group translation (implemented).
+3. X11 key-event integration, live modifier/group state, focus resets, compose handling, safe replacement, and desktop-session smoke tests.
+4. IBus Wayland integration; validate GNOME, KDE Plasma, and XFCE configurations.
+5. Fcitx5 compatibility and documented limitations.
+6. Build and test all four Linux release formats, then add them to the tag release workflow.
