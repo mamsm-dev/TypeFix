@@ -1,0 +1,16 @@
+[package]
+name = "typefix-linux-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Shared English/Persian keyboard-layout mistake detection core"
+
+[lib]
+name = "typefix_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "typefix-check"
+path = "src/main.rs"
+
+[dependencies]
