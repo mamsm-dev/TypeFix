@@ -21,6 +21,11 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
         .expect("setxkbmap installed");
     assert!(status.success(), "could not configure us,ir XKB groups");
 
+    let query = Command::new("setxkbmap").arg("-query").output().expect("query XKB");
+    assert!(query.status.success());
+    let query_text = String::from_utf8_lossy(&query.stdout);
+    assert!(query_text.contains("layout:") && query_text.contains("us,ir"), "unexpected XKB layout: {query_text}");
+
     let (connection, screen) = x11rb::connect(None).expect("connect to Xvfb");
     let version = connection.xinput_xi_query_version(2, 0).unwrap().reply().unwrap();
     assert!(version.major_version >= 2, "XInput2 2.0 is required");
@@ -62,25 +67,22 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     assert!(saw_shifted_a_press, "XI2 did not deliver Shift+A with effective Shift modifier and group 0");
     assert!(saw_a_release, "XI2 did not deliver A release with group 0");
 
-    // Toggle from US (group 0) to Persian (group 1), then press the same
-    // physical key using its US keysym lookup. The keycode remains 38.
-    run_xdotool(&["keydown", "Alt_L"]);
-    run_xdotool(&["keydown", "Shift_L"]);
-    run_xdotool(&["keyup", "Shift_L"]);
-    run_xdotool(&["keyup", "Alt_L"]);
+    // Send the configured two-key chord as one XTest chord. This avoids
+    // inter-process timing gaps between individual keydown/keyup commands.
+    run_xdotool(&["key", "--clearmodifiers", "Alt_L+Shift_L"]);
     run_xdotool(&["key", "a"]);
 
     let deadline = Instant::now() + Duration::from_secs(5);
-    let mut saw_group_one_press = false;
-    let mut saw_group_one_release = false;
-    while Instant::now() < deadline && !(saw_group_one_press && saw_group_one_release) {
+    let mut press_groups = Vec::new();
+    let mut release_groups = Vec::new();
+    while Instant::now() < deadline && !(press_groups.contains(&1) && release_groups.contains(&1)) {
         if let Some(event) = connection.poll_for_event().unwrap() {
             match event {
                 Event::XinputKeyPress(e) if e.detail == 38 => {
-                    saw_group_one_press |= e.group.effective == 1;
+                    press_groups.push(e.group.effective);
                 }
                 Event::XinputKeyRelease(e) if e.detail == 38 => {
-                    saw_group_one_release |= e.group.effective == 1;
+                    release_groups.push(e.group.effective);
                 }
                 _ => {}
             }
@@ -88,8 +90,8 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
             thread::sleep(Duration::from_millis(10));
         }
     }
-    assert!(saw_group_one_press, "XI2 did not report active Persian group 1 on key press");
-    assert!(saw_group_one_release, "XI2 did not report active Persian group 1 on key release");
+    assert!(press_groups.contains(&1), "XI2 did not report Persian group 1 on key press; observed groups: {press_groups:?}");
+    assert!(release_groups.contains(&1), "XI2 did not report Persian group 1 on key release; observed groups: {release_groups:?}");
 
     // Compile the active XKB configuration and verify the same physical key
     // translates differently in group 1. No typed text is captured or passed
