@@ -89,14 +89,14 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
         .expect("xkbcomp installed");
     loader.stdin.take().expect("xkbcomp stdin").write_all(&map.stdout).unwrap();
     let loaded = loader.wait().expect("wait for xkbcomp");
-    assert!(loaded.success(), "xkbcomp could not load the two-group map on XI2 master keyboard");
+    assert!(loaded.success(), "xkbcomp could not load the two-group map on XI2 source keyboard");
 
     // Lock the same master keyboard into group 1 through the XKB protocol.
     // This is deterministic test setup, not a production layout-switch feature.
     let state_before = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
-    eprintln!("XKB group before lock on XI2 source device {}: {:?}", master_keyboard_id, state_before.group);
+    eprintln!("XKB group before lock on XI2 source device {}: {:?}", source_keyboard_id, state_before.group);
     connection.xkb_latch_lock_state(
-        u16::from(master_keyboard_id),
+        u16::from(source_keyboard_id),
         x11rb::protocol::xproto::ModMask::from(0u16),
         x11rb::protocol::xproto::ModMask::from(0u16),
         true,
@@ -106,8 +106,8 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
         0u16,
     ).unwrap().check().unwrap();
     connection.flush().unwrap();
-    let state_after = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
-    eprintln!("XKB group after lock on XI2 device {}: {:?}", master_keyboard_id, state_after.group);
+    let state_after = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
+    eprintln!("XKB group after lock on XI2 device {}: {:?}", source_keyboard_id, state_after.group);
     run_xdotool(&["key", "a"]);
 
     let deadline = Instant::now() + Duration::from_secs(5);
