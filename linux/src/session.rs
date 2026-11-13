@@ -127,7 +127,7 @@ impl TypingSession {
             }
             SessionEvent::Space => self.finish_word(dicts, source, map),
             SessionEvent::Tab => {
-                if let Some(suggestion) = self.suggestion.take() {
+                if self.suggestion.take().is_some() {
                     let action = SessionAction::Apply {
                         text: map.convert(&self.run),
                         delete_chars: self.run.chars().count(),
