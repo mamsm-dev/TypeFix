@@ -186,7 +186,8 @@ impl X11SessionConnection {
             .xinput_xi_select_events(
                 root,
                 &[EventMask {
-                    // XIAllMasterDevices is device ID 1 in the XI2 protocol.\n                    deviceid: 1,
+                    // XIAllMasterDevices is device ID 1 in the XI2 protocol.
+                    deviceid: 1,
                     mask: vec![mask],
                 }],
             )
