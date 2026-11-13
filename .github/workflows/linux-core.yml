@@ -2,7 +2,7 @@ name: Linux core CI
 
 on:
   push:
-    branches: [main, feature/linux-x11-wayland]
+    branches: [main, 'feature/**']
     paths:
       - "linux/**"
       - ".github/workflows/linux-core.yml"
