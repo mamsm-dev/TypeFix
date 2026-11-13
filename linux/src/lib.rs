@@ -48,8 +48,21 @@ impl Dictionaries {
     }
 
     pub fn is_mistake(&self, typed: &str, language: Language, converted: &str) -> bool {
+        self.is_mistake_with_min(typed, language, converted, 3)
+    }
+
+    /// Same detection rules with a caller-selected minimum length. The session
+    /// adapter uses a lower threshold only for a preceding word joined to a
+    /// longer, already-confirmed wrong-layout run (matching Windows behavior).
+    pub fn is_mistake_with_min(
+        &self,
+        typed: &str,
+        language: Language,
+        converted: &str,
+        min_letters: usize,
+    ) -> bool {
         let word = normalize(typed);
-        if word.chars().count() < 3 { return false; }
+        if word.chars().count() < min_letters { return false; }
         match language {
             Language::Persian => {
                 let english = normalize(converted);
@@ -115,6 +128,8 @@ pub fn suggest(dicts: &Dictionaries, map: &LayoutMap, typed: &str, language: Lan
         original: typed.to_owned(), converted, source: language,
     })
 }
+
+pub mod session;
 
 #[cfg(test)]
 mod tests {
