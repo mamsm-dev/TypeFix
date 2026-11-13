@@ -238,7 +238,7 @@ mod tests {
         fs::write(root.join("fa"), "سلام\nدنیا\n").unwrap();
         let dicts = Dictionaries::load(root.join("en"), root.join("fa")).unwrap();
         let mut map = LayoutMap::default();
-        for (from, to) in [('s', "س"), ('a', "ل"), ('l', "ا"), ('m', "م")] {
+        for (from, to) in [('s', "س"), ('g', "ل"), ('h', "ا"), ('l', "م")] {
             map.insert(from, to);
         }
         (dicts, map)
@@ -248,7 +248,7 @@ mod tests {
     fn offers_suggestion_after_word_boundary_and_tab_applies_it() {
         let (dicts, map) = fixture();
         let mut session = TypingSession::new();
-        for ch in "salam".chars() {
+        for ch in "sghl".chars() {
             session.handle(SessionEvent::Text(ch.to_string()), &dicts, Language::English, &map);
         }
         assert!(matches!(
@@ -257,7 +257,7 @@ mod tests {
         ));
         assert_eq!(
             session.handle(SessionEvent::Tab, &dicts, Language::English, &map),
-            SessionAction::Apply { text: "سلام ".into(), delete_chars: 6 }
+            SessionAction::Apply { text: "سلام ".into(), delete_chars: 5 }
         );
         assert!(session.suggestion().is_none());
     }
@@ -266,7 +266,7 @@ mod tests {
     fn focus_change_clears_buffer_and_suggestion() {
         let (dicts, map) = fixture();
         let mut session = TypingSession::new();
-        for ch in "salam".chars() {
+        for ch in "sghl".chars() {
             session.handle(SessionEvent::Text(ch.to_string()), &dicts, Language::English, &map);
         }
         session.handle(SessionEvent::Space, &dicts, Language::English, &map);
@@ -282,7 +282,7 @@ mod tests {
     fn disabling_session_clears_pending_text() {
         let (dicts, map) = fixture();
         let mut session = TypingSession::new();
-        for ch in "salam".chars() {
+        for ch in "sghl".chars() {
             session.handle(SessionEvent::Text(ch.to_string()), &dicts, Language::English, &map);
         }
         session.handle(SessionEvent::Space, &dicts, Language::English, &map);
@@ -297,7 +297,7 @@ mod tests {
     fn backspace_preserves_suggestion_when_only_the_separator_is_removed() {
         let (dicts, map) = fixture();
         let mut session = TypingSession::new();
-        for ch in "salam".chars() {
+        for ch in "sghl".chars() {
             session.handle(SessionEvent::Text(ch.to_string()), &dicts, Language::English, &map);
         }
         session.handle(SessionEvent::Space, &dicts, Language::English, &map);
