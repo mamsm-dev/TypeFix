@@ -75,14 +75,15 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     // Lock the server's core keyboard into group 1 through the XKB protocol.
     // This is deterministic test setup, not a production layout-switch feature.
     connection.xkb_latch_lock_state(
-        ID::USE_CORE_KBD,
-        0,
-        0,
+        u16::from(ID::USE_CORE_KBD),
+        x11rb::protocol::xproto::ModMask::from(0u16),
+        x11rb::protocol::xproto::ModMask::from(0u16),
         true,
         Group::from(1),
-        0,
+        x11rb::protocol::xproto::ModMask::from(0u16),
+        x11rb::protocol::xproto::ModMask::from(0u16),
         false,
-        0,
+        0u16,
     ).unwrap().check().unwrap();
     connection.flush().unwrap();
     run_xdotool(&["key", "a"]);
