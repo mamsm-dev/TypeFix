@@ -1,4 +1,9 @@
-use std::{process::Command, thread, time::{Duration, Instant}};
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant},
+};
 use x11rb::{
     connection::Connection,
     protocol::{
@@ -18,16 +23,26 @@ fn run_xdotool(args: &[&str]) {
 
 #[test]
 fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
-    // Configure two actual XKB groups on the isolated virtual X server.
-    let configure = Command::new("setxkbmap")
-        .args(["-layout", "us,ir", "-verbose", "10"])
+    // Compile a two-group keymap and explicitly load it into the isolated Xvfb
+    // server. setxkbmap -print only emits the map; xkbcomp performs the load.
+    let map = Command::new("setxkbmap")
+        .args(["-layout", "us,ir", "-option", "", "-print"])
         .output()
         .expect("setxkbmap installed");
     assert!(
-        configure.status.success(),
-        "could not configure us,ir XKB groups: {}",
-        String::from_utf8_lossy(&configure.stderr)
+        map.status.success(),
+        "could not compile us,ir XKB map: {}",
+        String::from_utf8_lossy(&map.stderr)
     );
+    let display = std::env::var("DISPLAY").expect("Xvfb DISPLAY is set");
+    let mut loader = Command::new("xkbcomp")
+        .args(["-w", "0", "-", &display])
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("xkbcomp installed");
+    loader.stdin.take().expect("xkbcomp stdin").write_all(&map.stdout).unwrap();
+    let loaded = loader.wait().expect("wait for xkbcomp");
+    assert!(loaded.success(), "xkbcomp could not load the two-group keymap");
 
     let (connection, screen) = x11rb::connect(None).expect("connect to Xvfb");
     let version = connection.xinput_xi_query_version(2, 0).unwrap().reply().unwrap();
