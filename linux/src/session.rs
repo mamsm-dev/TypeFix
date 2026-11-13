@@ -234,11 +234,11 @@ mod tests {
         let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let root = std::env::temp_dir().join(format!("typefix-session-{nonce}"));
         fs::create_dir_all(&root).unwrap();
-        fs::write(root.join("en"), "hello\nworld\nsalam\n").unwrap();
+        fs::write(root.join("en"), "hello\nworld\nwant\n").unwrap();
         fs::write(root.join("fa"), "سلام\nدنیا\n").unwrap();
         let dicts = Dictionaries::load(root.join("en"), root.join("fa")).unwrap();
         let mut map = LayoutMap::default();
-        for (from, to) in [('s', "س"), ('a', "ا"), ('l', "ل"), ('m', "م")] {
+        for (from, to) in [('s', "س"), ('a', "ل"), ('l', "ا"), ('m', "م")] {
             map.insert(from, to);
         }
         (dicts, map)
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn backspace_updates_the_pending_suggestion() {
+    fn backspace_preserves_suggestion_when_only_the_separator_is_removed() {
         let (dicts, map) = fixture();
         let mut session = TypingSession::new();
         for ch in "salam".chars() {
@@ -302,6 +302,6 @@ mod tests {
         }
         session.handle(SessionEvent::Space, &dicts, Language::English, &map);
         session.handle(SessionEvent::Backspace, &dicts, Language::English, &map);
-        assert!(session.suggestion().is_none());
+        assert!(session.suggestion().is_some());
     }
 }
