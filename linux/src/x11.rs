@@ -127,6 +127,19 @@ pub struct X11RawKeyEvent {
     pub pressed: bool,
 }
 
+/// An XI2 device key event with the modifier and group snapshot supplied by the server.
+/// Unlike XI2 raw events, device events include the effective XKB state at event time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct X11KeyEvent {
+    pub keycode: u8,
+    pub device_id: u16,
+    pub source_id: u16,
+    pub timestamp: u32,
+    pub pressed: bool,
+    pub effective_modifiers: u32,
+    pub effective_group: u8,
+}
+
 pub struct X11SessionConnection {
     connection: RustConnection,
     pub screen_number: usize,
@@ -174,7 +187,7 @@ impl X11SessionConnection {
                 root,
                 &[EventMask {
                     // XIAllMasterDevices is device ID 1 in the XI2 protocol.\n                    deviceid: 1,
-                    mask: vec![u32::from(mask)],
+                    mask: vec![mask],
                 }],
             )
             .map_err(|e| format!("could not select XI2 raw key events: {e}"))?
@@ -183,6 +196,54 @@ impl X11SessionConnection {
         self.connection
             .flush()
             .map_err(|e| format!("could not flush XI2 event selection: {e}"))
+    }
+
+    /// Explicitly subscribes to XI2 device key events on the root window.
+    ///
+    /// These focus-propagated device events include effective modifier and group
+    /// snapshots at event time. They are still visible across applications on
+    /// the same X server; this method is opt-in and does not grab or consume input.
+    pub fn subscribe_key_events(&self) -> Result<(), String> {
+        let root = self.connection.setup().roots[self.screen_number].root;
+        let mask = XIEventMask::KEY_PRESS | XIEventMask::KEY_RELEASE;
+        self.connection
+            .xinput_xi_select_events(
+                root,
+                &[EventMask {
+                    deviceid: 1, // XIAllMasterDevices
+                    mask: vec![mask],
+                }],
+            )
+            .map_err(|e| format!("could not select XI2 device key events: {e}"))?
+            .check()
+            .map_err(|e| format!("X server rejected XI2 device key event selection: {e}"))?;
+        self.connection
+            .flush()
+            .map_err(|e| format!("could not flush XI2 device event selection: {e}"))
+    }
+
+    /// Waits for a focus-propagated XI2 key event and returns the server's
+    /// effective modifier/group snapshot. No text is decoded or emitted.
+    pub fn wait_for_key_event(&self) -> Result<X11KeyEvent, String> {
+        loop {
+            let event = self.connection.wait_for_event()
+                .map_err(|e| format!("X11 event wait failed: {e}"))?;
+            let (detail, device_id, source_id, timestamp, pressed, modifiers, group) = match event {
+                Event::XinputKeyPress(event) =>
+                    (event.detail, event.deviceid, event.sourceid, event.time, true,
+                     event.mods.effective, event.group.effective),
+                Event::XinputKeyRelease(event) =>
+                    (event.detail, event.deviceid, event.sourceid, event.time, false,
+                     event.mods.effective, event.group.effective),
+                _ => continue,
+            };
+            let keycode = u8::try_from(detail)
+                .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
+            return Ok(X11KeyEvent {
+                keycode, device_id, source_id, timestamp, pressed,
+                effective_modifiers: modifiers, effective_group: group,
+            });
+        }
     }
 
     /// Waits for the next raw key transition, ignoring unrelated X11 events.
