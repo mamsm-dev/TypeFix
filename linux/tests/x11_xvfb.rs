@@ -116,14 +116,24 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     while Instant::now() < deadline && !(press_groups.contains(&1) && release_groups.contains(&1)) {
         if let Some(event) = connection.poll_for_event().unwrap() {
             match event {
-                Event::XinputKeyPress(e) if e.detail == 38 => press_groups.push(e.group.effective),
-                Event::XinputKeyRelease(e) if e.detail == 38 => release_groups.push(e.group.effective),
+                Event::XinputKeyPress(e) if e.detail == 38 => {
+                    eprintln!("post-switch XI2 press: device={} source={} group base={} latched={} locked={} effective={}",
+                        e.deviceid, e.sourceid, e.group.base, e.group.latched, e.group.locked, e.group.effective);
+                    press_groups.push(e.group.effective);
+                }
+                Event::XinputKeyRelease(e) if e.detail == 38 => {
+                    eprintln!("post-switch XI2 release: device={} source={} group base={} latched={} locked={} effective={}",
+                        e.deviceid, e.sourceid, e.group.base, e.group.latched, e.group.locked, e.group.effective);
+                    release_groups.push(e.group.effective);
+                }
                 _ => {}
             }
         } else {
             thread::sleep(Duration::from_millis(10));
         }
     }
+    let final_state = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
+    eprintln!("XKB group after synthetic key on XI2 source device {}: {:?}", source_keyboard_id, final_state.group);
     assert!(press_groups.contains(&1), "XI2 did not report Persian group 1 on key press; observed groups: {press_groups:?}");
     assert!(release_groups.contains(&1), "XI2 did not report Persian group 1 on key release; observed groups: {release_groups:?}");
 
