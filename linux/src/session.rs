@@ -129,7 +129,7 @@ impl TypingSession {
             SessionEvent::Tab => {
                 if let Some(suggestion) = self.suggestion.take() {
                     let action = SessionAction::Apply {
-                        text: suggestion.converted,
+                        text: map.convert(&self.run),
                         delete_chars: self.run.chars().count(),
                     };
                     self.clear();
