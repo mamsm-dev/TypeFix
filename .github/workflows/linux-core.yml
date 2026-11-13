@@ -17,5 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install XKB build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev xkb-data x11-xkb-utils
       - name: Test shared core
         run: cargo test --manifest-path linux/Cargo.toml
