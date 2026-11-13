@@ -1,6 +1,6 @@
-# Linux port
+# Linux implementation
 
-The Linux port is being developed as a separate implementation. Existing macOS and Windows applications remain unchanged.
+The Linux port is a standalone implementation. The former macOS and Windows application source trees are not part of this Linux-focused repository.
 
 ## Desktop support
 
@@ -31,30 +31,23 @@ This means Wayland support depends on the active input method and applications a
 
 ## Implementation status
 
-The shared detector, backend-neutral typing-session state machine, X11 connection/keymap preflight, and explicit opt-in XI2 raw and device-event observers are implemented. The device-event observer exposes server-supplied effective modifier/group metadata, but does not decode text or inject replacements. Compose/dead-key processing, focus resets, keymap-change handling, popup/tray UI, safe replacement, and desktop-session smoke tests remain pending. See [SESSION.md](SESSION.md) for the adapter contract and exact boundary.
+The shared English/Persian detector, backend-neutral typing-session state machine, X11 connection/keymap preflight, and explicit opt-in XI2 raw and device-event observers are implemented. The device-event observer exposes server-supplied effective modifier/group metadata, but does not decode text or inject replacements. Compose/dead-key processing, focus resets, keymap-change handling, popup/tray UI, safe replacement, Xvfb event-delivery validation, and desktop-session smoke tests remain pending. See [SESSION.md](SESSION.md) for the adapter contract and exact boundary.
 
-## Shared behavior
+## Shared behavior and data
 
-Reuse the bundled English/Persian word lists and detection rules from the Windows implementation. Layout conversion must use the active XKB keymap, not a hard-coded US mapping, so Persian and non-US layouts work correctly.
+The Linux implementation uses the shared English and Persian word-frequency files in `../Resources/`. Layout conversion must use the active XKB keymap, not a hard-coded US mapping, so Persian and non-US layouts work correctly.
 
 ## Release artifacts
 
-Each tagged release should eventually attach:
-
-- TypeFix-Linux-x86_64.AppImage
-- typefix_<version>_amd64.deb
-- typefix_<version>_x86_64.rpm
-- typefix-<version>-1-x86_64.pkg.tar.zst
-
-All packages must contain the same tested Linux build. Enable AppImage, Debian, RPM, and Arch packaging only after the Linux application and runtime dependencies are buildable in CI; never publish placeholder or empty packages.
+Linux packages are not available yet. Enable AppImage, Debian, RPM, and Arch packaging only after the Linux application and runtime dependencies are buildable and tested in CI; never publish placeholder or empty packages.
 
 ## Milestones
 
 1. Shared detection core and backend-neutral typing-session state machine.
 2. X11 connection/XInput2 capability preflight and XKB layout-group translation (implemented).
 3. Explicit opt-in XI2 raw key observation (implemented; keycodes only).
-4. Explicit opt-in XI2 device key events with effective modifier/group metadata (implemented; requires desktop validation before text decoding).
+4. Explicit opt-in XI2 device key events with effective modifier/group metadata (implemented; requires Xvfb and desktop validation before text decoding).
 5. Compose/dead-key handling, focus resets, safe replacement, and desktop-session smoke tests.
 6. IBus Wayland integration; validate GNOME, KDE Plasma, and XFCE configurations.
 7. Fcitx5 compatibility and documented limitations.
-8. Build and test all four Linux release formats, then add them to the tag release workflow.
+8. Build and test Linux release formats, then add them to a tag release workflow.
