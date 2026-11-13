@@ -9,7 +9,7 @@ use x11rb::{
     connection::Connection,
     protocol::{
         xinput::{
-            ConnectionExt as XInputConnectionExt, Device, DeviceId, EventMask, XIEventMask,
+            ConnectionExt as XInputConnectionExt, EventMask, XIEventMask,
         },
         Event,
     },
@@ -173,7 +173,7 @@ impl X11SessionConnection {
             .xinput_xi_select_events(
                 root,
                 &[EventMask {
-                    deviceid: DeviceId::from(Device::ALL_MASTER),
+                    // XIAllMasterDevices is device ID 1 in the XI2 protocol.\n                    deviceid: 1,
                     mask: vec![u32::from(mask)],
                 }],
             )
