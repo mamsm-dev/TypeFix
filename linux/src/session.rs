@@ -36,7 +36,6 @@ pub enum SessionAction {
     Apply { text: String, delete_chars: usize },
 }
 
-#[derive(Default)]
 pub struct TypingSession {
     enabled: bool,
     word: String,
@@ -46,9 +45,22 @@ pub struct TypingSession {
     suggestion: Option<Suggestion>,
 }
 
+impl Default for TypingSession {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            word: String::new(),
+            previous: String::new(),
+            run: String::new(),
+            run_words: 0,
+            suggestion: None,
+        }
+    }
+}
+
 impl TypingSession {
     pub fn new() -> Self {
-        Self { enabled: true, ..Self::default() }
+        Self::default()
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
