@@ -4,7 +4,11 @@ TypeFix needs access to text as it is entered to recognize a wrong keyboard layo
 
 ## X11
 
-The current X11 layer only opens a connection as the desktop user, checks XI2 availability, and compiles configured XKB layout metadata. It does not yet subscribe to key events or inject text. Any future event listener will be a user process, not a root service. X11 does not provide strong per-application input isolation: a client with access to the X server may be able to observe keystrokes from other clients. A future listener must keep its buffer in memory only, avoid logging typed text, and provide an immediate pause/quit control. Reliable password-field detection is not available; users who require strict isolation should disable the X11 event backend.
+The X11 connection and keymap probe do not subscribe to key events. A separate `subscribe_raw_key_events()` method provides explicit opt-in to XI2 raw key press/release observation for master devices. It returns keycodes and event metadata only; it does not decode text, grab or consume events, inject text, or write typed content to logs. The probe never enables this subscription.
+
+Raw XI2 events are server-wide, not scoped to the focused application, and X11 does not provide strong per-application input isolation. The observer must not be enabled silently. Any future text buffer must remain in memory only, avoid logs/persistence/network transmission, and clear on focus changes, navigation, shortcuts, cancellation, and pause/quit. Reliable password-field detection is not available; users who require strict isolation should disable X11 event observation.
+
+Raw key events do not include a coherent active XKB modifier/group snapshot. Do not translate raw keycodes into text until a separate XKB state-notification path is implemented and tested.
 
 ## Wayland
 
