@@ -23,8 +23,8 @@ fn run_xdotool(args: &[&str]) {
 
 #[test]
 fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
-    // Compile a two-group keymap and explicitly load it into the isolated Xvfb
-    // server. setxkbmap -print only emits the map; xkbcomp performs the load.
+    // Generate a two-group map. It is loaded onto the XI2 master keyboard
+    // after the first event reveals the actual device ID used by Xvfb.
     let map = Command::new("setxkbmap")
         .args(["-layout", "us,ir", "-option", "", "-print"])
         .output()
@@ -34,15 +34,6 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
         "could not compile us,ir XKB map: {}",
         String::from_utf8_lossy(&map.stderr)
     );
-    let display = std::env::var("DISPLAY").expect("Xvfb DISPLAY is set");
-    let mut loader = Command::new("xkbcomp")
-        .args(["-w", "0", "-", &display])
-        .stdin(Stdio::piped())
-        .spawn()
-        .expect("xkbcomp installed");
-    loader.stdin.take().expect("xkbcomp stdin").write_all(&map.stdout).unwrap();
-    let loaded = loader.wait().expect("wait for xkbcomp");
-    assert!(loaded.success(), "xkbcomp could not load the two-group keymap");
 
     let (connection, screen) = x11rb::connect(None).expect("connect to Xvfb");
     let version = connection.xinput_xi_query_version(2, 0).unwrap().reply().unwrap();
@@ -89,9 +80,19 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     assert!(saw_shifted_a_press, "XI2 did not deliver Shift+A with effective Shift modifier and group 0");
     assert!(saw_a_release, "XI2 did not deliver A release with group 0");
 
-    // Lock the server's core keyboard into group 1 through the XKB protocol.
-    // This is deterministic test setup, not a production layout-switch feature.
     let master_keyboard_id = master_keyboard_id.expect("XI2 key event exposed master keyboard ID");
+    let display = std::env::var("DISPLAY").expect("Xvfb DISPLAY is set");
+    let mut loader = Command::new("xkbcomp")
+        .args(["-w", "0", "-i", &master_keyboard_id.to_string(), "-", &display])
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("xkbcomp installed");
+    loader.stdin.take().expect("xkbcomp stdin").write_all(&map.stdout).unwrap();
+    let loaded = loader.wait().expect("wait for xkbcomp");
+    assert!(loaded.success(), "xkbcomp could not load the two-group map on XI2 master keyboard");
+
+    // Lock the same master keyboard into group 1 through the XKB protocol.
+    // This is deterministic test setup, not a production layout-switch feature.
     let state_before = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
     eprintln!("XKB group before lock on XI2 device {}: {:?}", master_keyboard_id, state_before.group);
     connection.xkb_latch_lock_state(
