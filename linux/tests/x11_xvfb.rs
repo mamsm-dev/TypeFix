@@ -8,7 +8,7 @@ use x11rb::{
     connection::Connection,
     protocol::{
         xinput::{ConnectionExt as XInputConnectionExt, EventMask, XIEventMask},
-        xkb::{ConnectionExt as XkbConnectionExt, Group, ID},
+        xkb::{ConnectionExt as XkbConnectionExt, Group},
         Event,
     },
 };
@@ -93,7 +93,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     // This is deterministic test setup, not a production layout-switch feature.
     let master_keyboard_id = master_keyboard_id.expect("XI2 key event exposed master keyboard ID");
     let state_before = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
-    eprintln!("XKB group before lock on XI2 device {}: {}", master_keyboard_id, state_before.group);
+    eprintln!("XKB group before lock on XI2 device {}: {:?}", master_keyboard_id, state_before.group);
     connection.xkb_latch_lock_state(
         u16::from(master_keyboard_id),
         x11rb::protocol::xproto::ModMask::from(0u16),
