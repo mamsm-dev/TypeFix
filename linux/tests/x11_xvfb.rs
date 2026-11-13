@@ -81,7 +81,6 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
         true,
         Group::from(1),
         x11rb::protocol::xproto::ModMask::from(0u16),
-        x11rb::protocol::xproto::ModMask::from(0u16),
         false,
         0u16,
     ).unwrap().check().unwrap();
