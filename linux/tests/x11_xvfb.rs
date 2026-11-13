@@ -16,7 +16,7 @@ fn run_xdotool(args: &[&str]) {
 fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     // Configure two real XKB groups and a deterministic group-toggle shortcut.
     let configure = Command::new("setxkbmap")
-        .args(["-layout", "us,ir", "-option", "grp:alt_shift_toggle", "-print", "-verbose", "10"])
+        .args(["-layout", "us,ir", "-option", "grp:alt_shift_toggle", "-verbose", "10"])
         .output()
         .expect("setxkbmap installed");
     assert!(
