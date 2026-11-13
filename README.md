@@ -13,7 +13,7 @@ It currently contains the shared detection core, a backend-neutral typing-sessio
 | X11 connection and XI2 capability preflight | Implemented |
 | XKB keymap compilation and layout groups | Implemented; server-side custom keymap parity still needs validation |
 | Opt-in XI2 raw key observer | Implemented; keycodes and metadata only |
-| Opt-in XI2 device-event observer | Implemented; includes effective modifier/group snapshots; Xvfb and desktop validation pending |
+| Opt-in XI2 device-event observer | Implemented; effective modifier/group snapshots verified under Xvfb; real desktop validation pending |
 | Text decoding and compose/dead keys | Not implemented |
 | Focus tracking and secure-input handling | Not implemented |
 | Suggestion popup, tray/menu UI, and safe replacement | Not implemented |
@@ -31,19 +31,27 @@ X11 event observation is server-wide and does not provide strong per-application
 
 ## Build and test
 
-Requirements: Rust stable, a C toolchain, `libxkbcommon` development headers, X11/XInput2 development libraries, and XKB data.
+Requirements: Rust stable, a C toolchain, `libxkbcommon` development headers, X11/XInput2 development libraries, XKB data, Xvfb, and xdotool for the integration test.
 
 On Debian/Ubuntu:
 
 ```bash
-sudo apt-get install build-essential pkg-config libxkbcommon-dev libx11-dev libxi-dev xkb-data x11-xkb-utils
+sudo apt-get install build-essential pkg-config libxkbcommon-dev libx11-dev libxi-dev xkb-data x11-xkb-utils xvfb xdotool
 ```
 
-Run the Rust tests:
+Run the core and unit tests:
 
 ```bash
-cargo test --manifest-path linux/Cargo.toml
+cargo test --manifest-path linux/Cargo.toml --lib --bins
 ```
+
+Run the XI2 event-delivery integration test in an isolated virtual X server:
+
+```bash
+xvfb-run -a cargo test --manifest-path linux/Cargo.toml --test x11_xvfb -- --nocapture
+```
+
+The Xvfb test uses xdotool/XTest only to synthesize test keystrokes in the isolated CI/test display. The production code does not inject input.
 
 Run the X11 preflight probe from an X11 graphical session:
 
