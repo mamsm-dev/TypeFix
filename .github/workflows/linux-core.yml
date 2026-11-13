@@ -1,0 +1,23 @@
+name: Linux core CI
+
+on:
+  push:
+    branches: [main, feature/linux-x11-wayland]
+    paths:
+      - "linux/**"
+      - ".github/workflows/linux-core.yml"
+  pull_request:
+    paths:
+      - "linux/**"
+      - ".github/workflows/linux-core.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test shared core
+        run: cargo test --manifest-path linux/Cargo.toml
+      - name: Check formatting
+        run: cargo fmt --manifest-path linux/Cargo.toml -- --check
