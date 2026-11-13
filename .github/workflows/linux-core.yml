@@ -2,7 +2,7 @@ name: Linux core CI
 
 on:
   push:
-    branches: [main, feature/linux-x11-wayland]
+    branches: [main, 'feature/**']
     paths:
       - "linux/**"
       - ".github/workflows/linux-core.yml"
@@ -17,5 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux and Xvfb test dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libxkbcommon-dev libx11-dev libxi-dev xkb-data x11-xkb-utils xvfb xdotool
       - name: Test shared core
-        run: cargo test --manifest-path linux/Cargo.toml
+        run: cargo test --manifest-path linux/Cargo.toml --lib --bins
+      - name: Verify XI2 event delivery under Xvfb
+        run: xvfb-run -a cargo test --manifest-path linux/Cargo.toml --test x11_xvfb -- --nocapture

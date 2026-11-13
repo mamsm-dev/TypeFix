@@ -10,14 +10,11 @@ Licensed under the Creative Commons Attribution-ShareAlike 4.0 International Lic
 (https://creativecommons.org/licenses/by-sa/4.0/). The files are included unmodified.
 The MIT license of this project does not apply to these files.
 
-## windows/data/words.txt
+## Promo fonts
 
-Webster's Second International Dictionary word list (1934), in the public domain. It is the same
-list macOS ships as `/usr/share/dict/words`, bundled for Windows, where no such list exists.
-
-## promo/fonts
+The former demo-media pipeline used the following fonts; this section is retained for attribution of existing artwork:
 
 - **Inter** by Rasmus Andersson (https://rsms.me/inter/), licensed under the SIL Open Font License 1.1.
 - **Vazirmatn** by Saber Rastikerdar (https://github.com/rastikerdar/vazirmatn), licensed under the SIL Open Font License 1.1.
 
-Both are used only to render the demo video and are included unmodified, from the Fontsource packages.
+Both are used only in existing demo media and are included unmodified, from the Fontsource packages.

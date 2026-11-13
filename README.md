@@ -1,207 +1,80 @@
-<p align="center">
-  <img src="assets/cover.png" alt="LayoutFixer: typed in the wrong layout? Just press Tab.">
-</p>
+# TypeFix for Linux
 
-<p align="center">
-  Typed a whole sentence with the wrong keyboard layout? Press <kbd>Tab</kbd>.<br>
-  A tiny app for <b>macOS</b> and <b>Windows</b> that fixes English ⇄ Persian layout mistakes as you type.
-</p>
+TypeFix is an English ⇄ Persian keyboard-layout mistake detector for Linux. The Linux port is under active development and is **not yet a complete desktop application**.
 
-<p align="center">
-  <a href="https://github.com/sina-developer/LayoutFixer/releases/latest/download/LayoutFixer-macOS.zip"><b>Download for macOS</b></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/sina-developer/LayoutFixer/releases/latest/download/LayoutFixer-Windows-x64.zip"><b>Download for Windows</b></a>
-</p>
+It currently contains the shared detection core, a backend-neutral typing-session state machine, X11/XInput2 connection and event-observation primitives, and XKB keymap compilation. It does not yet decode live text, show suggestions, or replace text in applications.
 
-<p align="center">
-  <img src="assets/demo.gif" width="800" alt="LayoutFixer demo: a message typed on the Persian layout is detected, a popup suggests 'want to grab lunch today', Tab fixes it and switches the keyboard to English.">
-</p>
+## Current status
 
----
-
-You meant to write:
-
-```
-want to grab lunch today
-```
-
-but the keyboard was still on Persian, so you got:
-
-```
-صشدف فخ لقشذ معدزا فخیشغ
-```
-
-LayoutFixer notices, shows a small popup next to your cursor, and when you press <kbd>Tab</kbd> it
-retypes the text in the right language **and switches your keyboard layout** for you. It works the
-other way too: `sghl` → `سلام`.
-
-## Features
-
-- Works in every app: browsers, chat apps, editors, mail.
-- Asks before changing anything. <kbd>Tab</kbd> fixes it, <kbd>Esc</kbd> (or just keep typing) ignores it.
-- Only steps in when it's sure: names, brands and typos (`github`, `figma`, `teh`) are never touched.
-- Fixes the whole run of wrong words, not just the last one.
-- Switches your keyboard layout so the next words come out right.
-- Fully offline. Nothing is stored or sent anywhere.
-
-## Install
-
-You need both an **English** and a **Persian** keyboard layout. LayoutFixer reads your real layouts
-(US, ABC, Persian, Persian-ISIRI 2901, …), so the key mapping always matches your keyboard.
-
-| Download | For |
+| Area | Status |
 |---|---|
-| [`LayoutFixer-macOS.zip`](https://github.com/sina-developer/LayoutFixer/releases/latest/download/LayoutFixer-macOS.zip) | macOS 13 or later, Apple silicon and Intel |
-| [`LayoutFixer-Windows-x64.zip`](https://github.com/sina-developer/LayoutFixer/releases/latest/download/LayoutFixer-Windows-x64.zip) | Windows 10 and 11, most PCs |
-| [`LayoutFixer-Windows-arm64.zip`](https://github.com/sina-developer/LayoutFixer/releases/latest/download/LayoutFixer-Windows-arm64.zip) | Windows on ARM (Snapdragon laptops) |
+| English/Persian detection core | Implemented with Rust tests |
+| Typing-session state machine | Implemented with lifecycle/reset tests |
+| X11 connection and XI2 capability preflight | Implemented |
+| XKB keymap compilation and layout groups | Implemented; server-side custom keymap parity still needs validation |
+| Opt-in XI2 raw key observer | Implemented; keycodes and metadata only |
+| Opt-in XI2 device-event observer | Implemented; effective modifier/group snapshots verified under Xvfb; real desktop validation pending |
+| Text decoding and compose/dead keys | Not implemented |
+| Focus tracking and secure-input handling | Not implemented |
+| Suggestion popup, tray/menu UI, and safe replacement | Not implemented |
+| Wayland / IBus | Planned |
+| Fcitx5 | Planned |
+| Linux packages | Not available |
 
-### macOS
+See [linux/README.md](linux/README.md), [linux/SESSION.md](linux/SESSION.md), and [linux/SECURITY.md](linux/SECURITY.md) for implementation details and security boundaries.
 
-1. Download [`LayoutFixer-macOS.zip`](https://github.com/sina-developer/LayoutFixer/releases/latest/download/LayoutFixer-macOS.zip), unzip it and move **LayoutFixer** to **Applications**.
-2. Open it. The app isn't notarized by Apple yet, so macOS blocks the first launch: go to
-   **System Settings → Privacy & Security** and click **Open Anyway**.
-3. Allow **Accessibility** when asked (**System Settings → Privacy & Security → Accessibility →
-   LayoutFixer**). It starts working within a couple of seconds.
-4. Optional: add it to **System Settings → General → Login Items** so it starts with your Mac.
+## Supported desktop direction
 
-No Persian layout yet? **System Settings → Keyboard → Text Input → Edit… → +** and add **Persian**.
+The initial target is X11 on KDE Plasma, GNOME, and XFCE. Wayland support is planned through an input-method integration, IBus first and Fcitx5 later. There is no privileged service, raw `/dev/input` access, uinput, or global keyboard grab in the current implementation.
 
-### Windows
+X11 event observation is server-wide and does not provide strong per-application isolation or reliable password-field detection. It remains explicit opt-in and must not be treated as a secure-input-aware monitor.
 
-1. **Pick the right download.** Most PCs need
-   [`LayoutFixer-Windows-x64.zip`](https://github.com/sina-developer/LayoutFixer/releases/latest/download/LayoutFixer-Windows-x64.zip).
-   Not sure? Open **Settings → System → About** and look at **System type**: "ARM-based processor"
-   means you need
-   [`LayoutFixer-Windows-arm64.zip`](https://github.com/sina-developer/LayoutFixer/releases/latest/download/LayoutFixer-Windows-arm64.zip).
-2. **Unzip it.** Right-click the zip → **Extract All…**, and pick a folder you'll keep, for example
-   `Documents\LayoutFixer`. Keep `LayoutFixer.exe` and the `data` folder next to each other.
-3. **Run `LayoutFixer.exe`.** The app isn't signed by Microsoft yet, so the first time Windows may
-   say *Windows protected your PC*: click **More info → Run anyway**.
-4. **Find it in the tray.** LayoutFixer has no window. Its icon sits in the system tray next to the
-   clock (click **^** if you don't see it). Right-click it for:
-   - **Enabled**: turn fixing on or off
-   - **Start with Windows**: launch it automatically when you sign in
-   - **Quit LayoutFixer**
-5. **Try it.** Switch your keyboard to English, type `sghl` and a space in Notepad, then press
-   <kbd>Tab</kbd> when the popup appears.
+## Build and test
 
-No permissions to grant on Windows.
+Requirements: Rust stable, a C toolchain, `libxkbcommon` development headers, X11/XInput2 development libraries, XKB data, Xvfb, and xdotool for the integration test.
 
-**Add the Persian keyboard:** **Settings → Time & language → Language & region → Add a language →
-Persian (فارسی)**, then switch layouts with <kbd>Win</kbd> + <kbd>Space</kbd>. If LayoutFixer's tray
-menu says *Add both an English and a Persian keyboard layout*, one of them is missing.
-
-**Update:** quit LayoutFixer from the tray, then replace the folder with the new download.
-
-**Uninstall:** quit it from the tray, turn off **Start with Windows** if you turned it on, then
-delete the folder.
-
-## How it works
-
-Every key has a twin on the other layout: `t` is also `ف`, `h` is also `ا`. LayoutFixer only
-suggests a fix when the other reading is a **real word**:
-
-| You're typing on… | It flags a word when… | Suggests |
-|---|---|---|
-| Persian layout | the same keys spell a common English word (`صشدف` → `want`) | English |
-| English layout | it isn't an English word **and** the same keys spell a real Persian word (`sghl` → `سلام`) | Persian |
-
-So names, brands and typos (`github`, `figma`, `teh`) are never touched: their Persian reading is
-gibberish.
-
-- Words are checked when you press <kbd>Space</kbd>.
-- 2-letter words are ambiguous (the Persian word `شد` is `an` on English keys), so they're only
-  included when the word next to them is clearly wrong too.
-- The physical keys you pressed are recorded and translated with the other layout, so the
-  conversion is exact for whatever layouts you use.
-- The word lists are 50k-word English and Persian frequency lists plus Webster's word list, all bundled.
-
-### Known limits
-
-- **Popup position.** The popup appears at the text cursor. Apps that don't report where the cursor is
-  (some Electron apps) get it at the mouse pointer instead.
-- **Password fields.** Typing there is protected by the system, so LayoutFixer never sees it.
-- **Windows admin apps.** Apps running *as administrator* can't be watched unless LayoutFixer also
-  runs as administrator.
-- **macOS rebuilds.** If you build the Mac app yourself, macOS treats every new build as a new app:
-  remove LayoutFixer from the Accessibility list with **−** and allow it again.
-
-## Privacy
-
-This is a keyboard monitor, so here is exactly what it does:
-
-- It keeps only the last few words you typed, in memory, to check them and retype them.
-- That memory is cleared when you click, use arrow keys, use shortcuts, or switch apps.
-- Nothing is written to disk, logged, or sent over the network. The app makes no network requests.
-
-The code is small enough to read: the Mac app is one file, [`Sources/main.swift`](Sources/main.swift),
-and the Windows app is six short files in [`windows/src`](windows/src).
-
-## Build from source
-
-**macOS:** needs only the Xcode Command Line Tools (`xcode-select --install`).
+On Debian/Ubuntu:
 
 ```bash
-git clone https://github.com/sina-developer/LayoutFixer.git
-cd LayoutFixer
-./scripts/build.sh
-open build/LayoutFixer.app
+sudo apt-get install build-essential pkg-config libxkbcommon-dev libx11-dev libxi-dev xkb-data x11-xkb-utils xvfb xdotool
 ```
 
-**Windows:** needs the [.NET 10 SDK](https://dotnet.microsoft.com/download). It also compiles on
-macOS and Linux, but only runs on Windows.
+Run the core and unit tests:
 
 ```bash
-dotnet publish windows/LayoutFixer.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
+cargo test --manifest-path linux/Cargo.toml --lib --bins
 ```
 
-**Test the detection without running the app:**
+Run the XI2 event-delivery integration test in an isolated virtual X server:
 
 ```bash
-./build/LayoutFixer.app/Contents/MacOS/LayoutFixer --test "صشدف لقشذ معدزا"
-# صشدف -> want  FIX
-# لقشذ -> grab  FIX
-# معدزا -> lunch  FIX
+xvfb-run -a cargo test --manifest-path linux/Cargo.toml --test x11_xvfb -- --nocapture
 ```
 
-On Windows the same works with `LayoutFixer.exe --test "…"`.
+The Xvfb test uses xdotool/XTest only to synthesize test keystrokes in the isolated CI/test display. The production code does not inject input.
 
-**Releases:** pushing a tag like `v0.3.0` builds both apps on GitHub Actions and publishes the
-release ([`.github/workflows/release.yml`](.github/workflows/release.yml)).
+Run the X11 preflight probe from an X11 graphical session:
 
-```
-Sources/main.swift       Mac app: event tap, detection, popup, menu bar
-windows/src/             Windows app: keyboard hook, detection, popup, tray
-Resources/               word lists and icons (shared by both apps)
-icon/                    icon and cover drawing scripts (run scripts/make-icons.sh)
-scripts/build.sh         builds build/LayoutFixer.app (--zip for a release zip)
+```bash
+cargo run --manifest-path linux/Cargo.toml --bin typefix-x11-probe
 ```
 
-## Contributing
+The probe checks the X11 connection, XInput2, and XKB configuration. It does **not** subscribe to or capture key events.
 
-Ideas and pull requests are welcome, for example:
+## Privacy and security
 
-- More language pairs (Arabic, Russian, Hebrew, …)
-- A settings window (auto-fix without asking, per-app exclusions)
-- Learning from words you dismiss
-- Signed and notarized releases
+- No typed text is logged, persisted, or transmitted by the current X11 observer.
+- The current event layer returns key/event metadata only; text decoding is not enabled.
+- No root service, raw evdev access, uinput, or input grab is used.
+- Any future text buffer must remain in memory only and be cleared on focus changes, navigation, shortcuts, cancellation, and pause/quit.
+- X11 does not offer reliable per-application isolation or reliable password-field detection. Users requiring strict isolation should keep X11 event observation disabled.
 
-## Credits
+## Project layout
 
-- English and Persian word frequencies: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by
-  Hermit Dave, licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
-- English word list on Windows: Webster's Second International (public domain).
-- See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Author
-
-Made by **Sina Gholizadeh**.
-
-- Website: [c-na.dev](https://c-na.dev)
-- Email: [hi@c-na.dev](mailto:hi@c-na.dev)
-
-Questions, bugs or ideas: [open an issue](https://github.com/sina-developer/LayoutFixer/issues) or send an email.
+- `linux/`: Rust core, X11 backend primitives, security notes, and session adapter contract.
+- `Resources/en_50k.txt` and `Resources/fa_50k.txt`: shared English and Persian word-frequency data.
+- `assets/`: project artwork and demo media.
 
 ## License
 
-[MIT](LICENSE)
+The project code is MIT-licensed. Third-party data and assets retain their respective licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
