@@ -90,6 +90,7 @@ fn load_ranked(path: impl AsRef<Path>) -> io::Result<HashMap<String, usize>> {
 
 pub fn normalize(s: &str) -> String {
     let s = s.to_lowercase().replace('ي', "ی").replace('ك', "ک");
+    let s: String = s.chars().filter(|c| !matches!(*c as u32, 0x064B..=0x065F | 0x0670 | 0x06D6..=0x06ED)).collect();
     s.trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace()).to_string()
 }
 
