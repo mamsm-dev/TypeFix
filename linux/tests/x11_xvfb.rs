@@ -108,7 +108,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     connection.flush().unwrap();
     let state_after = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
     eprintln!("XKB group after lock on XI2 device {}: {:?}", source_keyboard_id, state_after.group);
-    run_xdotool(&["key", "a"]);
+    run_xdotool(&["keycode", "38"]);
 
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut press_groups = Vec::new();
