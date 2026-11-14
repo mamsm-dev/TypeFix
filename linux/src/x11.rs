@@ -356,7 +356,7 @@ mod tests {
         };
         let keymap = config.compile().expect("us intl keymap compiles");
         let mut compose = ComposeProcessor::from_buffer(
-            "<dead_acute> <e> : \"é\" eacute\\n",
+            "<dead_acute> <e> : \"é\" eacute\n",
             "en_US.UTF-8",
         )
         .expect("deterministic Compose table compiles");
