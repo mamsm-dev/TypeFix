@@ -17,6 +17,10 @@ path = "src/main.rs"
 name = "typefix-x11-probe"
 path = "src/bin/x11_probe.rs"
 
+[[bin]]
+name = "typefix-x11-events"
+path = "src/bin/x11_events.rs"
+
 [dependencies]
 x11rb = { version = "0.13", features = ["xinput", "xkb"] }
 xkbcommon = "0.9"
