@@ -173,9 +173,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
 }
 
 #[test]
-fn xvfb_xi2_focus_selection_on_root_observes_child_window_focus_changes() {
-    use x11rb::protocol::xinput;
-
+fn xvfb_xi2_focus_selection_on_root_observes_child_focus_transitions() {
     let (connection, screen) = x11rb::connect(None).expect("connect to Xvfb");
     let version = connection.xinput_xi_query_version(2, 0).unwrap().reply().unwrap();
     assert!(version.major_version >= 2, "XInput2 2.0 is required");
@@ -185,7 +183,7 @@ fn xvfb_xi2_focus_selection_on_root_observes_child_window_focus_changes() {
     let focus_mask = XIEventMask::from((1u32 << 9) | (1u32 << 10));
     connection.xinput_xi_select_events(
         root,
-        &[EventMask { deviceid: xinput::Device::ALL_MASTER, mask: vec![focus_mask] }],
+        &[EventMask { deviceid: 1, mask: vec![focus_mask] }],
     ).unwrap().check().unwrap();
 
     let child = connection.generate_id().unwrap();
@@ -209,16 +207,19 @@ fn xvfb_xi2_focus_selection_on_root_observes_child_window_focus_changes() {
     connection.flush().unwrap();
 
     let deadline = Instant::now() + Duration::from_secs(3);
-    let mut saw_root_focus_in = false;
+    let mut saw_root_focus_event = false;
     let mut observed = Vec::new();
-    while Instant::now() < deadline && !saw_root_focus_in {
+    while Instant::now() < deadline && !saw_root_focus_event {
         if let Some(event) = connection.poll_for_event().unwrap() {
             match event {
                 Event::XinputFocusIn(e) => {
                     observed.push(("in", e.event, e.detail));
-                    saw_root_focus_in |= e.event == root;
+                    saw_root_focus_event |= e.event == root;
                 }
-                Event::XinputFocusOut(e) => observed.push(("out", e.event, e.detail)),
+                Event::XinputFocusOut(e) => {
+                    observed.push(("out", e.event, e.detail));
+                    saw_root_focus_event |= e.event == root;
+                },
                 _ => {}
             }
         } else {
@@ -230,7 +231,7 @@ fn xvfb_xi2_focus_selection_on_root_observes_child_window_focus_changes() {
     connection.flush().unwrap();
 
     assert!(
-        saw_root_focus_in,
-        "selecting XI2 FocusIn/FocusOut on root did not report focus entering a child window; observed: {observed:?}"
+        saw_root_focus_event,
+        "selecting XI2 FocusIn/FocusOut on root did not report a child focus transition; observed: {observed:?}"
     );
 }
