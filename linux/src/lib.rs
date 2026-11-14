@@ -77,8 +77,8 @@ impl Dictionaries {
                 if !word.chars().any(char::is_alphabetic)
                     || !word.chars().all(|c| c.is_alphabetic() || PERSIAN_KEYS.contains(c))
                     || self.en_all.contains(&word) { return false; }
-                if word.contains('\'') {
-                    let prefix = word.split('\'').next().unwrap_or("");
+                if word.contains('\\'') {
+                    let prefix = word.split('\\'').next().unwrap_or("");
                     if self.en_all.contains(prefix) { return false; }
                 }
                 self.persian_rank(&normalize(converted)).is_some()
@@ -129,6 +129,7 @@ pub fn suggest(dicts: &Dictionaries, map: &LayoutMap, typed: &str, language: Lan
     })
 }
 
+pub mod compose;
 pub mod session;
 pub mod x11;
 
@@ -141,8 +142,8 @@ mod tests {
         let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let root = std::env::temp_dir().join(format!("typefix-test-{}", nonce));
         std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(root.join("en"), "hello\nworld\nwant\n").unwrap();
-        std::fs::write(root.join("fa"), "سلام\nدنیا\n").unwrap();
+        std::fs::write(root.join("en"), "hello\\nworld\\nwant\\n").unwrap();
+        std::fs::write(root.join("fa"), "سلام\\nدنیا\\n").unwrap();
         Dictionaries::load(root.join("en"), root.join("fa")).unwrap()
     }
 
