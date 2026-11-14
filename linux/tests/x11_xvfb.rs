@@ -409,3 +409,78 @@ fn x11_session_dispatch_clears_typing_on_focus_change() {
 
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn x11_xvfb_session_dispatch_produces_persian_layout_suggestion() {
+    let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    use typefix_core::{
+        compose::ComposeProcessor,
+        session::{ComposedTypingSession, SessionAction},
+        Dictionaries, Language, LayoutMap,
+    };
+    use typefix_core::x11::{X11SessionConnection, X11SessionEvent};
+
+    let layout = Command::new("setxkbmap")
+        .args(["-layout", "us,ir"])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(layout.success(), "could not set deterministic US/Persian layout");
+
+    let root_dir = std::env::temp_dir().join(format!("typefix-x11-e2e-{}", std::process::id()));
+    std::fs::create_dir_all(&root_dir).unwrap();
+    std::fs::write(root_dir.join("en"), "hello\nworld\nwant\n").unwrap();
+    std::fs::write(root_dir.join("fa"), "سلام\nدنیا\n").unwrap();
+    let dicts = Dictionaries::load(root_dir.join("en"), root_dir.join("fa")).unwrap();
+    let mut map = LayoutMap::default();
+    for (from, to) in [('s', "س"), ('g', "ل"), ('h', "ا"), ('l', "م")] {
+        map.insert(from, to);
+    }
+    let compose = ComposeProcessor::new(std::ffi::OsStr::new("en_US.UTF-8"))
+        .expect("system Compose table is available in CI");
+    let mut typing = ComposedTypingSession::new(compose);
+
+    let mut connection = X11SessionConnection::connect().expect("connect X11 session API");
+    connection.subscribe_session_events().expect("subscribe to XI2 key and focus events");
+
+    let (client, screen) = x11rb::connect(None).expect("connect X11 test client");
+    let root = client.setup().roots[screen].root;
+    client.set_input_focus(InputFocus::PARENT, root, x11rb::CURRENT_TIME).unwrap().check().unwrap();
+    client.flush().unwrap();
+
+    // XTEST is confined to this isolated Xvfb test. Production code only observes.
+    run_xdotool(&["type", "--clearmodifiers", "--delay", "1", "sghl"]);
+    run_xdotool(&["key", "space"]);
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut suggestion = None;
+    while Instant::now() < deadline && suggestion.is_none() {
+        if let Some(event) = connection.poll_for_session_event().expect("poll X11 session event") {
+            if matches!(event, X11SessionEvent::Key(_)) {
+                if let SessionAction::Suggestion(found) = connection.handle_session_event(
+                    &mut typing,
+                    event,
+                    &dicts,
+                    Language::English,
+                    &map,
+                ).expect("dispatch X11 key event") {
+                    suggestion = Some(found);
+                }
+            } else {
+                let _ = connection.handle_session_event(
+                    &mut typing,
+                    event,
+                    &dicts,
+                    Language::English,
+                    &map,
+                ).expect("dispatch X11 lifecycle event");
+            }
+        } else {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    assert_eq!(suggestion.as_ref().map(|s| s.original.as_str()), Some("sghl"));
+    assert_eq!(suggestion.as_ref().map(|s| s.converted.as_str()), Some("سلام"));
+
+    std::fs::remove_dir_all(root_dir).unwrap();
+}
