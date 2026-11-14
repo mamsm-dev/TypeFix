@@ -1,53 +1,50 @@
 # Linux typing session state
 
-The Linux core includes a backend-neutral `TypingSession` state machine:
+The Linux core includes a backend-neutral `TypingSession` state machine and a `ComposedTypingSession` wrapper. The session collects committed text in memory, evaluates likely layout mistakes at word boundaries, and exposes suggestions as session actions. Tab acceptance is represented in the core; the desktop application must still decide how to present and apply it.
 
-- Collect text as produced by the active layout and evaluate a word at a space boundary.
-- Preserve a pending wrong-layout run so subsequent words can be included.
-- Permit a short preceding word to join a longer wrong-layout run.
-- Offer converted text for acceptance with Tab.
-- Clear pending text and suggestions on focus changes, navigation, pointer activity, shortcuts, cancellation, and disable.
+Session and Compose state are reset on focus changes, navigation, pointer activity, shortcuts, cancellation, disable, and explicit reset events.
 
-## X11 event adapter boundary
+## X11 event adapter
 
-The X11 connection provides three explicitly enabled XI2 observation paths, plus a combined subscription for session use:
+The X11 connection exposes explicit observation APIs:
 
-- `subscribe_raw_key_events()` / `wait_for_raw_key_event()`: raw keycode and event metadata only. Raw events do not contain the effective modifier/group snapshot.
-- `subscribe_key_events()` / `wait_for_key_event()`: focus-propagated device key events containing the server-supplied effective modifier mask and active group at event time, along with master/source device IDs and timestamp.
-- `subscribe_focus_events()`: focus-in/focus-out metadata only.
-- `subscribe_session_events()` with `poll_for_session_event()` or `wait_for_session_event()`: selects key and focus masks together and returns both event types in one stream. Use this combined subscription for a live session; XI2 selections are per device/window, so separate key-only and focus-only selection calls may replace one another.
-- `subscribe_xkb_map_events()`: selects XKB MapNotify and NewKeyboardNotify events. These arrive as `X11SessionEvent::KeymapChanged`; call `refresh_keymap()` to rebuild the translator from the current `setxkbmap -query` RMLVO settings. Map changes map to `SessionEvent::Reset` so pending Compose and typing state are discarded.
-- `XkbKeymap::session_event_for_key()` maps key presses to session events: printable text/Compose, Space, Backspace, Tab, navigation reset, or shortcut reset. It ignores key releases and does not store text; the caller forwards the returned event to `ComposedTypingSession`.
-- `X11SessionConnection::handle_session_event()` dispatches one `X11SessionEvent` into `ComposedTypingSession`: key presses are translated and forwarded, focus changes reset the session, and keymap changes reset state then refresh the XKB keymap. The caller still owns the polling loop and must explicitly enable the subscriptions it needs.
-- `X11SessionConnection::run_session_loop()` is an explicitly invoked foreground loop. It enables the key/focus and XKB map subscriptions, dispatches events, and sends non-empty `SessionAction` values to a caller callback until the caller's stop predicate returns true. It does not log typed text or inject replacements.
+- `subscribe_raw_key_events()` / `wait_for_raw_key_event()`: raw keycode and event metadata only.
+- `subscribe_key_events()` / `wait_for_key_event()`: key events with server-supplied effective modifier and active-group snapshots, plus master/source device IDs and timestamps.
+- `subscribe_focus_events()`: focus-in/focus-out metadata.
+- `subscribe_session_events()` with `poll_for_session_event()` or `wait_for_session_event()`: combined key and focus stream. Prefer this combined subscription because XI2 selections are per device/window.
+- `subscribe_xkb_map_events()`: XKB map/new-keyboard notifications. On change, session state is reset and `refresh_keymap()` rebuilds the keymap translator from the current XKB RMLVO settings.
 
-None of these subscriptions is enabled by the probe or automatically at startup. None grabs or consumes application input. The enriched device-event path is the candidate for future key translation; the raw path remains diagnostic only. `X11FocusEvent::as_session_event()` maps both XI2 FocusIn and FocusOut to `SessionEvent::FocusChanged`; handling that event clears both the typing buffer and pending Compose state. The mapping is implemented and unit-tested, but no continuously running desktop adapter currently forwards live focus events into a typing session. All three observation paths are visible across applications on the same X server and therefore require explicit user opt-in. The `typefix-x11-events` foreground diagnostic uses the enriched path and prints key metadata only; run it only during an intentional desktop smoke test and stop it with Ctrl+C.
+`XkbKeymap::session_event_for_key()` translates a key press using its event-time modifier/group snapshot and maps the result to a session event (text/Compose, Space, Backspace, Tab, navigation, or shortcut). Key releases do not produce text.
 
-## Compose/dead-key state
+`X11SessionConnection::handle_session_event()` dispatches one X11 event into `ComposedTypingSession`. `X11SessionConnection::run_session_loop()` provides the explicit foreground loop: it enables the required subscriptions, dispatches events, and invokes a caller-provided callback for non-empty `SessionAction` values until the caller's stop predicate requests termination.
 
-The `compose` module wraps `libxkbcommon`'s locale-specific Compose state machine:
+No observer is enabled by the probe or silently at application startup. The foreground loop is opt-in. It does not grab or consume application input, log typed text, or inject replacements. The diagnostic binary `typefix-x11-events` reports metadata only and should be used only during an intentional test.
 
-- A key symbol is fed to Compose before ordinary key-to-text translation.
-- Incomplete sequences produce no text; completed sequences return one committed UTF-8 string.
-- Cancelled sequences are discarded, and callers can explicitly reset pending composition.
-- The `ComposedTypingSession` wrapper couples Compose and typing-buffer lifecycle: focus changes, navigation, pointer activity, shortcuts, Backspace, Tab, explicit reset, and disable clear pending Compose state as well as the typing buffer. The platform adapter must still call these events when the corresponding desktop lifecycle event occurs.
+## Compose and dead keys
 
-The Compose processor remains an in-memory component. `ComposedTypingSession` now coordinates its reset lifecycle with `TypingSession`. The XKB layer exposes an explicit per-event translator that takes an XI2 device-event modifier/group snapshot, obtains the keysym, feeds Compose first, and returns only committed text. Neither component subscribes to events, retains a typed history, logs text, or injects text. The translator is not yet connected to the live event loop or `TypingSession`. Compose tests use a tiny deterministic table and do not depend on the host's locale files.
+The Compose processor wraps `libxkbcommon`'s locale-specific Compose state machine:
 
-## Adapter contract
+- Incomplete sequences produce no committed text.
+- Completed sequences return one UTF-8 string.
+- Cancelled sequences are discarded.
+- Explicit reset discards pending composition.
 
-A complete desktop adapter must:
+`ComposedTypingSession` coordinates Compose resets with typing-buffer lifecycle events. The XKB translator feeds Compose before ordinary key-to-text translation. Typed content and pending composition remain in memory; they are not persisted or transmitted by these components.
 
-1. Use the per-event modifier/group snapshot from XI2 device events with the active keymap; do not infer layout from raw keycodes.
-2. Handle key repeat, Compose/dead-key output, and keymap changes before forwarding committed printable text to `TypingSession`.
-3. Forward focus changes, navigation, pointer clicks, shortcuts, and cancellation as reset events.
-4. Keep typed text only in memory; do not log, persist, or transmit it.
-5. Show suggestions only in supported contexts and fail closed when a secure-input state is exposed.
-6. On Tab acceptance, perform replacement in the focused application and handle Unicode grapheme boundaries correctly. The core's Unicode-scalar deletion count is not yet a complete replacement contract.
-7. Keep capture and replacement inside the unprivileged user's graphical session. Never access raw evdev devices, install a root service, or use uinput.
+## Adapter and UI contract
 
-## Current boundary
+A complete desktop application must:
 
-The X11 layer now has an opt-in XI2 device-event path that receives modifier/group snapshots from the server. The isolated Xvfb integration test verifies delivery of key press/release events and checks the effective Shift modifier and group 0 snapshot. It does not validate every keyboard layout or a real desktop compositor/session. The implementation has an explicit per-event XKB/Compose translation primitive, but does not yet connect it to the live event loop or `TypingSession`; it also does not detect focus changes reliably, display a tray icon or popup, or replace text. The XKB compiler rebuilds from RMLVO configuration returned by `setxkbmap -query`; custom server-side keymap modifications may not be represented exactly.
+1. Use the XI2 event-time modifier/group snapshot with the active keymap; never infer the active layout from raw keycodes alone.
+2. Define and test key-repeat semantics so repeated press/release events cannot corrupt text or Compose state.
+3. Forward focus changes, navigation, pointer activity, shortcuts, cancellation, disable, and keymap changes as reset events.
+4. Keep typed content only in memory and never log, persist, or transmit it.
+5. Show suggestions only in supported contexts and fail closed when a platform exposes secure-input state.
+6. Treat Tab acceptance as a request to accept a suggestion, not as proof that text replacement is implemented. A future replacement adapter must handle Unicode grapheme boundaries and verify focus before acting.
+7. Run only in the unprivileged user's graphical session. Never use raw evdev access, a root service, or uinput.
 
-X11 clients with access to the same X server do not have strong per-application input isolation. Reliable password-field detection must not be claimed. Users who require stronger isolation should disable X11 event observation; Wayland remains planned through IBus input-method integration.
+## Current limitations
+
+X11 clients with access to the same server do not have strong per-application input isolation. Reliable password-field detection must not be claimed. Custom server-side keymap modifications may not be represented exactly by rebuilding from RMLVO settings. Automated Xvfb tests are not a substitute for real KDE/X11 validation.
+
+The real desktop smoke test remains pending. The UI, safe replacement, Wayland/IBus, and Fcitx5 are not implemented.
