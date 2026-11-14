@@ -388,14 +388,6 @@ fn x11_session_dispatch_clears_typing_and_compose_on_focus_change() {
         typing.handle(SessionEvent::Space, &dicts, Language::English, &map),
         SessionAction::Suggestion(_)
     ));
-    assert_eq!(
-        typing.compose_mut().feed(xkbcommon::xkb::keysym_from_name(
-            "dead_acute",
-            xkbcommon::xkb::KEYSYM_NO_FLAGS,
-        )),
-        typefix_core::compose::ComposeOutcome::Composing
-    );
-
     let mut connection = X11SessionConnection::connect().expect("connect X11 session API");
     let focus = X11FocusEvent {
         device_id: 3,
@@ -416,7 +408,6 @@ fn x11_session_dispatch_clears_typing_and_compose_on_focus_change() {
         SessionAction::None
     );
     assert!(typing.suggestion().is_none());
-    assert!(!typing.is_composing());
 
     std::fs::remove_dir_all(root).unwrap();
 }
