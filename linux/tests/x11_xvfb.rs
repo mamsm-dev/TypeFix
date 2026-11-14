@@ -156,7 +156,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     }
     let final_state = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
     eprintln!("XKB group after synthetic key on XI2 master device {}: {:?}", master_keyboard_id, final_state.group);
-    assert_eq!(final_state.group, Group::from(1), "synthetic input unexpectedly changed the source keyboard group");
+    assert_eq!(final_state.group, Group::from(1), "synthetic input unexpectedly changed the master keyboard group");
     assert!(press_groups.contains(&1), "XI2 did not report Persian group 1 on key press; observed groups: {press_groups:?}");
     assert!(release_groups.contains(&1), "XI2 did not report Persian group 1 on key release; observed groups: {release_groups:?}");
 
