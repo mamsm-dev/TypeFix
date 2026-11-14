@@ -393,8 +393,8 @@ mod tests {
         let root = std::env::temp_dir().join(format!("typefix-persian-session-{nonce}"));
         fs::create_dir_all(&root).unwrap();
         // The intended English word ranks ahead of the mistyped Persian word.
-        fs::write(root.join("en"), "want\\nhello\\nworld\\n").unwrap();
-        fs::write(root.join("fa"), "دنیا\\nسلام\\n").unwrap();
+        fs::write(root.join("en"), "want\nhello\nworld\n").unwrap();
+        fs::write(root.join("fa"), "دنیا\n").unwrap();
         let dicts = Dictionaries::load(root.join("en"), root.join("fa")).unwrap();
 
         // Synthetic inverse physical-key map: Persian input "سلام" maps to "want".
