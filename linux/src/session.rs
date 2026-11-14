@@ -5,7 +5,7 @@
 //! forwarding focus, navigation, and key events here. Keeping the state machine
 //! independent makes its privacy and reset behavior testable without a desktop.
 
-use crate::{Dictionaries, Language, LayoutMap, Suggestion};
+use crate::{compose::ComposeProcessor, Dictionaries, Language, LayoutMap, Suggestion};
 
 const MAX_RUN_WORDS: usize = 12;
 
@@ -34,6 +34,71 @@ pub enum SessionAction {
     /// delete_chars counts Unicode scalar values, not grapheme clusters; a
     /// concrete X11 injector must use XKB/text-input semantics carefully.
     Apply { text: String, delete_chars: usize },
+}
+
+/// Couples the typing buffer and XKB Compose state so lifecycle events
+/// cannot clear one while accidentally leaving the other active.
+///
+/// The platform adapter may borrow the Compose processor to translate a key
+/// event, then forward the resulting SessionEvent through this wrapper.
+pub struct ComposedTypingSession {
+    typing: TypingSession,
+    compose: ComposeProcessor,
+}
+
+impl ComposedTypingSession {
+    pub fn new(compose: ComposeProcessor) -> Self {
+        Self {
+            typing: TypingSession::new(),
+            compose,
+        }
+    }
+
+    pub fn compose_mut(&mut self) -> &mut ComposeProcessor {
+        &mut self.compose
+    }
+
+    pub fn is_composing(&self) -> bool {
+        self.compose.is_composing()
+    }
+
+    pub fn suggestion(&self) -> Option<&Suggestion> {
+        self.typing.suggestion()
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.compose.reset();
+        }
+        self.typing.set_enabled(enabled);
+    }
+
+    pub fn reset(&mut self) {
+        self.compose.reset();
+        self.typing.reset();
+    }
+
+    pub fn handle(
+        &mut self,
+        event: SessionEvent,
+        dicts: &Dictionaries,
+        source: Language,
+        map: &LayoutMap,
+    ) -> SessionAction {
+        if matches!(
+            event,
+            SessionEvent::Reset
+                | SessionEvent::FocusChanged
+                | SessionEvent::Navigation
+                | SessionEvent::PointerPressed
+                | SessionEvent::Shortcut
+                | SessionEvent::Backspace
+                | SessionEvent::Tab
+        ) {
+            self.compose.reset();
+        }
+        self.typing.handle(event, dicts, source, map)
+    }
 }
 
 pub struct TypingSession {
@@ -242,6 +307,66 @@ mod tests {
             map.insert(from, to);
         }
         (dicts, map)
+    }
+
+    fn composed_session() -> ComposedTypingSession {
+        let compose = ComposeProcessor::from_buffer(
+            "<dead_acute> <e> : \"é\" eacute\\n",
+            "en_US.UTF-8",
+        )
+        .expect("deterministic Compose table compiles");
+        ComposedTypingSession::new(compose)
+    }
+
+    #[test]
+    fn lifecycle_events_reset_compose_state() {
+        let (dicts, map) = fixture();
+        let events = [
+            SessionEvent::Reset,
+            SessionEvent::FocusChanged,
+            SessionEvent::Navigation,
+            SessionEvent::PointerPressed,
+            SessionEvent::Shortcut,
+            SessionEvent::Backspace,
+            SessionEvent::Tab,
+        ];
+
+        for event in events {
+            let mut session = composed_session();
+            assert_eq!(
+                session.compose_mut().feed(xkbcommon::xkb::keysym_from_name(
+                    "dead_acute",
+                    xkbcommon::xkb::KEYSYM_NO_FLAGS,
+                )),
+                crate::compose::ComposeOutcome::Composing,
+            );
+            assert!(session.is_composing());
+            session.handle(event, &dicts, Language::English, &map);
+            assert!(!session.is_composing());
+        }
+    }
+
+    #[test]
+    fn disabling_composed_session_resets_both_states() {
+        let (dicts, map) = fixture();
+        let mut session = composed_session();
+        session.handle(
+            SessionEvent::Text("sghl".into()),
+            &dicts,
+            Language::English,
+            &map,
+        );
+        session.compose_mut().feed(xkbcommon::xkb::keysym_from_name(
+            "dead_acute",
+            xkbcommon::xkb::KEYSYM_NO_FLAGS,
+        ));
+        assert!(session.is_composing());
+        session.set_enabled(false);
+        assert!(!session.is_composing());
+        assert_eq!(
+            session.handle(SessionEvent::Tab, &dicts, Language::English, &map),
+            SessionAction::None
+        );
     }
 
     #[test]
