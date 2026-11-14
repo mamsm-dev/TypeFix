@@ -519,6 +519,42 @@ impl X11SessionConnection {
         }
     }
 
+    /// Run an explicitly invoked foreground session loop.
+    ///
+    /// This enables the XI2 key/focus and XKB map subscriptions, dispatches
+    /// events into the composed typing session, and reports non-empty actions
+    /// to the caller. The caller supplies a stop predicate (for example, an
+    /// application shutdown flag) and owns all UI/presentation decisions.
+    /// No text is logged or injected by this loop.
+    pub fn run_session_loop<OnAction, ShouldStop>(
+        &mut self,
+        session: &mut crate::session::ComposedTypingSession,
+        dicts: &crate::Dictionaries,
+        source: crate::Language,
+        map: &crate::LayoutMap,
+        mut on_action: OnAction,
+        mut should_stop: ShouldStop,
+    ) -> Result<(), String>
+    where
+        OnAction: FnMut(crate::session::SessionAction),
+        ShouldStop: FnMut() -> bool,
+    {
+        self.subscribe_session_events()?;
+        self.subscribe_xkb_map_events()?;
+
+        while !should_stop() {
+            if let Some(event) = self.poll_for_session_event()? {
+                let action = self.handle_session_event(session, event, dicts, source, map)?;
+                if !matches!(action, crate::session::SessionAction::None) {
+                    on_action(action);
+                }
+            } else {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        }
+        Ok(())
+    }
+
     /// Polls one event from the opt-in X11 session stream without blocking.
     ///
     /// Returns `None` when no subscribed key/focus event is currently queued.

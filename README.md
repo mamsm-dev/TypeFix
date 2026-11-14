@@ -2,7 +2,7 @@
 
 TypeFix is an English ⇄ Persian keyboard-layout mistake detector for Linux. The Linux port is under active development and is **not yet a complete desktop application**.
 
-It currently contains the shared detection core, a backend-neutral typing-session state machine with coordinated Compose resets, X11/XInput2 connection and event-observation primitives, XKB keymap compilation/refresh, and an in-memory key-to-session dispatcher. The dispatcher handles one event at a time; a continuously running desktop loop, suggestion UI, and text replacement in applications are not implemented.
+It currently contains the shared detection core, a backend-neutral typing-session state machine with coordinated Compose resets, X11/XInput2 connection and event-observation primitives, XKB keymap compilation/refresh, and an in-memory key-to-session dispatcher with an explicitly invoked foreground event loop. A desktop UI and text replacement in applications are not implemented.
 
 ## Current status
 
