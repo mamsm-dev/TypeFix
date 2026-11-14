@@ -164,7 +164,7 @@ impl XkbKeymap {
             0xff09 if event.effective_modifiers & 1 != 0 => Some(crate::session::SessionEvent::Navigation),
             0xff09 => Some(crate::session::SessionEvent::Tab),
             0x0020 => Some(crate::session::SessionEvent::Space),
-            0xff0d | 0xff1b | 0xffff | 0xff50..=0xff57 | 0xff63 | 0xffbe..=0xffe0 => {
+            0xfe20 | 0xff0d | 0xff1b | 0xffff | 0xff50..=0xff57 | 0xff63 | 0xffbe..=0xffe0 => {
                 Some(crate::session::SessionEvent::Navigation)
             }
             _ => match self.translate_event(event, compose) {
