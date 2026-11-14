@@ -24,9 +24,9 @@ The `compose` module wraps `libxkbcommon`'s locale-specific Compose state machin
 - A key symbol is fed to Compose before ordinary key-to-text translation.
 - Incomplete sequences produce no text; completed sequences return one committed UTF-8 string.
 - Cancelled sequences are discarded, and callers can explicitly reset pending composition.
-- The adapter must reset Compose state on focus changes, navigation, cancellation, disable, and keymap/locale replacement.
+- The `ComposedTypingSession` wrapper couples Compose and typing-buffer lifecycle: focus changes, navigation, pointer activity, shortcuts, Backspace, Tab, explicit reset, and disable clear pending Compose state as well as the typing buffer. The platform adapter must still call these events when the corresponding desktop lifecycle event occurs.
 
-The Compose processor is currently an isolated, in-memory component. The XKB layer exposes an explicit per-event translator that takes an XI2 device-event modifier/group snapshot, obtains the keysym, feeds Compose first, and returns only committed text. Neither component subscribes to events, retains a typed history, logs text, or injects text. The translator is not yet connected to the live event loop or `TypingSession`. Compose tests use a tiny deterministic table and do not depend on the host's locale files.
+The Compose processor remains an in-memory component. `ComposedTypingSession` now coordinates its reset lifecycle with `TypingSession`. The XKB layer exposes an explicit per-event translator that takes an XI2 device-event modifier/group snapshot, obtains the keysym, feeds Compose first, and returns only committed text. Neither component subscribes to events, retains a typed history, logs text, or injects text. The translator is not yet connected to the live event loop or `TypingSession`. Compose tests use a tiny deterministic table and do not depend on the host's locale files.
 
 ## Adapter contract
 
