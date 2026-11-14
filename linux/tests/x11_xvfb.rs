@@ -571,7 +571,7 @@ fn x11_xvfb_session_loop_preserves_repeated_key_presses() {
     let root_dir = std::env::temp_dir().join(format!("typefix-x11-repeat-{}", std::process::id()));
     std::fs::create_dir_all(&root_dir).unwrap();
     std::fs::write(root_dir.join("en"), "hello\nworld\nwant\n").unwrap();
-    std::fs::write(root_dir.join("fa"), "سلام\nسسسلام\nدنیا\n").unwrap();
+    std::fs::write(root_dir.join("fa"), "سلام\nسسلام\nدنیا\n").unwrap();
     let dicts = Dictionaries::load(root_dir.join("en"), root_dir.join("fa")).unwrap();
     let mut map = LayoutMap::default();
     for (from, to) in [('s', "س"), ('g', "ل"), ('h', "ا"), ('l', "م")] {
@@ -589,12 +589,15 @@ fn x11_xvfb_session_loop_preserves_repeated_key_presses() {
     let result = Arc::new(Mutex::new(None::<Suggestion>));
     let callback_result = Arc::clone(&result);
     let stop_result = Arc::clone(&result);
-    let producer = thread::spawn(|| {
+    let producer_done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let producer_done_thread = Arc::clone(&producer_done);
+    let producer = thread::spawn(move || {
         thread::sleep(Duration::from_millis(150));
         // Two consecutive 's' presses model a repeat transition. Both must
         // reach the session; release events are ignored for text purposes.
         run_xdotool(&["type", "--clearmodifiers", "--delay", "1", "ssghl"]);
         run_xdotool(&["key", "space"]);
+        producer_done_thread.store(true, std::sync::atomic::Ordering::Release);
     });
 
     connection.run_session_loop(
@@ -607,13 +610,16 @@ fn x11_xvfb_session_loop_preserves_repeated_key_presses() {
                 *callback_result.lock().unwrap() = Some(suggestion);
             }
         },
-        move || stop_result.lock().unwrap().is_some(),
-    ).expect("session loop exits after repeated-character suggestion");
+        move || {
+            stop_result.lock().unwrap().is_some()
+                || producer_done.load(std::sync::atomic::Ordering::Acquire)
+        },
+    ).expect("foreground session loop exits after producer completes");
 
     producer.join().unwrap();
     let suggestion = result.lock().unwrap().clone().expect("suggestion callback invoked");
     assert_eq!(suggestion.original, "ssghl");
-    assert_eq!(suggestion.converted, "سسسلام");
+    assert_eq!(suggestion.converted, "سسلام");
 
     std::fs::remove_dir_all(root_dir).unwrap();
 }
