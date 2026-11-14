@@ -924,3 +924,24 @@ mod tests {
         assert_eq!(keymap.translate_keycode(38, 1, 0).as_deref(), Some("ش"));
     }
 }
+
+    #[test]
+    fn translates_qwertz_physical_keys_in_german_layout_group() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "de".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/German XKB keymap compiles");
+
+        // The physical Y and Z positions swap in the German QWERTZ group.
+        // This guards against assuming a US layout when translating keycodes.
+        assert_eq!(keymap.translate_keycode(29, 0, 0).as_deref(), Some("y"));
+        assert_eq!(keymap.translate_keycode(52, 0, 0).as_deref(), Some("z"));
+        assert_eq!(keymap.translate_keycode(29, 1, 0).as_deref(), Some("z"));
+        assert_eq!(keymap.translate_keycode(52, 1, 0).as_deref(), Some("y"));
+        assert_eq!(keymap.translate_keycode(29, 1, 1).as_deref(), Some("Z"));
+    }
+}
