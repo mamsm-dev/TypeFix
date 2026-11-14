@@ -10,6 +10,7 @@ use x11rb::{
         xinput::{ConnectionExt as XInputConnectionExt, EventMask, XIEventMask},
         xkb::{ConnectionExt as XkbConnectionExt, Group},
         xtest::ConnectionExt as XTestConnectionExt,
+        xproto::{ConnectionExt as XprotoConnectionExt, CreateWindowAux, InputFocus, WindowClass, COPY_DEPTH_FROM_PARENT},
         Event,
     },
 };
@@ -124,12 +125,9 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
             || (xtest_version.major_version == 2 && xtest_version.minor_version >= 2),
         "XTEST 2.2 device-aware input is required"
     );
-    let xtest_device_id = u8::try_from(source_keyboard_id)
-        .expect("XTEST device IDs are represented as u8");
-    connection.xtest_fake_input(2, 38, 0, root, 0, 0, xtest_device_id)
-        .unwrap().check().unwrap();
-    connection.xtest_fake_input(3, 38, 0, root, 0, 0, xtest_device_id)
-        .unwrap().check().unwrap();
+    let xtest_device_id = u8::try_from(source_keyboard_id).expect("XTEST device IDs are represented as u8");
+    connection.xtest_fake_input(2, 38, 0, root, 0, 0, xtest_device_id).unwrap().check().unwrap();
+    connection.xtest_fake_input(3, 38, 0, root, 0, 0, xtest_device_id).unwrap().check().unwrap();
     connection.flush().unwrap();
 
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -172,4 +170,67 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     let keymap = config.compile().expect("compile US/Persian XKB keymap");
     assert_eq!(keymap.translate_keycode(38, 0, 0).as_deref(), Some("a"));
     assert_eq!(keymap.translate_keycode(38, 1, 0).as_deref(), Some("ش"));
+}
+
+#[test]
+fn xvfb_xi2_focus_selection_on_root_observes_child_window_focus_changes() {
+    use x11rb::protocol::xinput;
+
+    let (connection, screen) = x11rb::connect(None).expect("connect to Xvfb");
+    let version = connection.xinput_xi_query_version(2, 0).unwrap().reply().unwrap();
+    assert!(version.major_version >= 2, "XInput2 2.0 is required");
+
+    let root = connection.setup().roots[screen].root;
+    // XI2 FocusIn and FocusOut are event numbers 9 and 10 in XI2.
+    let focus_mask = XIEventMask::from((1u32 << 9) | (1u32 << 10));
+    connection.xinput_xi_select_events(
+        root,
+        &[EventMask { deviceid: xinput::Device::ALL_MASTER, mask: vec![focus_mask] }],
+    ).unwrap().check().unwrap();
+
+    let child = connection.generate_id().unwrap();
+    connection.create_window(
+        COPY_DEPTH_FROM_PARENT,
+        child,
+        root,
+        0,
+        0,
+        120,
+        80,
+        0,
+        WindowClass::INPUT_OUTPUT,
+        0,
+        &CreateWindowAux::new(),
+    ).unwrap().check().unwrap();
+    connection.map_window(child).unwrap().check().unwrap();
+    connection.flush().unwrap();
+
+    connection.set_input_focus(InputFocus::PARENT, child, x11rb::CURRENT_TIME).unwrap().check().unwrap();
+    connection.flush().unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut saw_root_focus_in = false;
+    let mut observed = Vec::new();
+    while Instant::now() < deadline && !saw_root_focus_in {
+        if let Some(event) = connection.poll_for_event().unwrap() {
+            match event {
+                Event::XinputFocusIn(e) => {
+                    observed.push(("in", e.event, e.detail));
+                    saw_root_focus_in |= e.event == root;
+                }
+                Event::XinputFocusOut(e) => observed.push(("out", e.event, e.detail)),
+                _ => {}
+            }
+        } else {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    connection.destroy_window(child).unwrap().check().unwrap();
+    connection.flush().unwrap();
+
+    assert!(
+        saw_root_focus_in,
+        "selecting XI2 FocusIn/FocusOut on root did not report focus entering a child window; observed: {observed:?}"
+    );
 }
