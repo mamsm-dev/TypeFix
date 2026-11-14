@@ -923,7 +923,6 @@ mod tests {
         // modifier mask is passed through the same translation path.
         assert_eq!(keymap.translate_keycode(38, 1, 0).as_deref(), Some("ش"));
     }
-}
 
     #[test]
     fn translates_qwertz_physical_keys_in_german_layout_group() {
