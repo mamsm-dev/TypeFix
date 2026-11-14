@@ -149,13 +149,18 @@ impl XkbKeymap {
             return None;
         }
 
-        const SHORTCUT_MODIFIERS: u32 = (1 << 2) | (1 << 3) | (1 << 6);
-        if event.effective_modifiers & SHORTCUT_MODIFIERS != 0 {
+        let mut state = xkb::State::new(&self.keymap);
+        state.update_mask(event.effective_modifiers, 0, 0, u32::from(event.effective_group), 0, 0);
+        // Resolve semantic modifier names through this keymap rather than
+        // assuming Alt/Super always occupy Mod1/Mod4 bit positions.
+        const SHORTCUT_MODIFIERS: [&str; 5] = ["Control", "Alt", "Super", "Meta", "Hyper"];
+        if SHORTCUT_MODIFIERS
+            .iter()
+            .any(|name| state.mod_name_is_active(name, xkb::STATE_MODS_EFFECTIVE))
+        {
             return Some(crate::session::SessionEvent::Shortcut);
         }
 
-        let mut state = xkb::State::new(&self.keymap);
-        state.update_mask(event.effective_modifiers, 0, 0, u32::from(event.effective_group), 0, 0);
         let keycode = xkb::Keycode::new(u32::from(event.keycode));
         let keysym = u32::from(state.key_get_one_sym(keycode));
 
