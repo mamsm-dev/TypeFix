@@ -393,14 +393,8 @@ impl X11SessionConnection {
             | x11_xkb::MapPart::KEY_BEHAVIORS
             | x11_xkb::MapPart::VIRTUAL_MODS
             | x11_xkb::MapPart::VIRTUAL_MOD_MAP;
-        let keyboard_details = x11_xkb::NKNDetail::DEVICE_ID
-            | x11_xkb::NKNDetail::KEYCODES
-            | x11_xkb::NKNDetail::GEOMETRY;
         let details = x11_xkb::SelectEventsAux {
-            new_keyboard_notify: Some(x11_xkb::SelectEventsAuxNewKeyboardNotify {
-                affect_new_keyboard: keyboard_details,
-                new_keyboard_details: keyboard_details,
-            }),
+            new_keyboard_notify: None,
             state_notify: None,
             controls_notify: None,
             indicator_state_notify: None,
