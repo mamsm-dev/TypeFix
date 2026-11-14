@@ -137,9 +137,9 @@ impl XkbKeymap {
     ///
     /// This classifies editing/navigation keys before Compose and routes
     /// Control/Alt/Super-modified input to the shortcut reset path. Modifier
-    /// bits use the standard XKB core positions (Control=2, Mod1=3, Mod4=6);
-    /// AltGr/Mod5 is intentionally not treated as a shortcut so it remains
-    /// available for printable symbols.
+    /// names are resolved through the active XKB keymap, so custom Alt/Super
+    /// mappings are respected. AltGr/Mod5 is intentionally not treated as a
+    /// shortcut so it remains available for printable symbols.
     pub fn session_event_for_key(
         &self,
         event: &X11KeyEvent,
