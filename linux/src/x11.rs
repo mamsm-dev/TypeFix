@@ -209,6 +209,14 @@ pub enum X11SessionEvent {
     Focus(X11FocusEvent),
 }
 
+impl X11FocusEvent {
+    /// Convert either direction of an XI2 focus transition into the
+    /// backend-neutral lifecycle event that clears typing and Compose state.
+    pub fn as_session_event(&self) -> crate::session::SessionEvent {
+        crate::session::SessionEvent::FocusChanged
+    }
+}
+
 pub struct X11SessionConnection {
     connection: RustConnection,
     pub screen_number: usize,
@@ -517,6 +525,26 @@ mod tests {
         let e = X11KeyEvent { keycode: 26, timestamp: 2, ..dead_acute };
         assert_eq!(keymap.translate_event(&dead_acute, &mut compose), X11TextOutcome::Composing);
         assert_eq!(keymap.translate_event(&e, &mut compose), X11TextOutcome::Text("é".into()));
+    }
+
+    #[test]
+    fn both_xi2_focus_directions_map_to_session_reset() {
+        let focus_in = X11FocusEvent {
+            device_id: 3,
+            source_id: 5,
+            timestamp: 10,
+            focused: true,
+            event_window: 1,
+            child_window: 42,
+        };
+        let focus_out = X11FocusEvent {
+            focused: false,
+            timestamp: 11,
+            ..focus_in
+        };
+
+        assert_eq!(focus_in.as_session_event(), crate::session::SessionEvent::FocusChanged);
+        assert_eq!(focus_out.as_session_event(), crate::session::SessionEvent::FocusChanged);
     }
 
     #[test]
