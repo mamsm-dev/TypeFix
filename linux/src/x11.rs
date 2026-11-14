@@ -299,4 +299,38 @@ mod tests {
         assert_eq!(keymap.translate_keycode(38, 0, 0).as_deref(), Some("a"));
         assert_eq!(keymap.translate_keycode(38, 1, 0).as_deref(), Some("ش"));
     }
+
+    #[test]
+    fn translates_us_shift_modifier_from_effective_mask() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("xkb-data and libxkbcommon installed");
+
+        // XKB's standard Shift modifier occupies bit zero. The XI2 event
+        // adapter supplies the effective modifier mask at key-event time.
+        assert_eq!(keymap.translate_keycode(38, 0, 1).as_deref(), Some("A"));
+        assert_eq!(keymap.translate_keycode(10, 0, 1).as_deref(), Some("!"));
+        assert_eq!(keymap.translate_keycode(38, 0, 0).as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn translates_persian_group_without_losing_group_selection() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("xkb-data and libxkbcommon installed");
+
+        // The active Persian group remains selected while the effective
+        // modifier mask is passed through the same translation path.
+        assert_eq!(keymap.translate_keycode(38, 1, 0).as_deref(), Some("ش"));
+    }
 }
