@@ -15,7 +15,7 @@ It currently contains the shared detection core, a backend-neutral typing-sessio
 | Opt-in XI2 raw key observer | Implemented; keycodes and metadata only |
 | Opt-in XI2 device-event observer | Implemented; effective modifier/group snapshots verified under Xvfb; real desktop validation pending |
 | XKB key-event text translation and Compose/dead keys | Implemented as an explicit in-memory primitive; not wired into the live session |
-| Focus tracking and secure-input handling | Not implemented |
+| Opt-in XI2 focus event delivery | Implemented as event metadata; client/session lifecycle wiring and secure-input handling remain incomplete |
 | Suggestion popup, tray/menu UI, and safe replacement | Not implemented |
 | Wayland / IBus | Planned |
 | Fcitx5 | Planned |
@@ -59,14 +59,14 @@ Run the X11 preflight probe from an X11 graphical session:
 cargo run --manifest-path linux/Cargo.toml --bin typefix-x11-probe
 ```
 
-The probe checks the X11 connection, XInput2, and XKB configuration. It does **not** subscribe to or capture key events.
+The probe checks the X11 connection, XInput2, and XKB configuration. It does **not** subscribe to or capture key or focus events.
 
 ## Privacy and security
 
 - No typed text is logged, persisted, or transmitted by the current X11 observer.
 - The event-observation layer returns key/event metadata only. A separate explicit translator can decode a supplied XI2 device-event snapshot in memory, but it is not started automatically or connected to a live session.
 - No root service, raw evdev access, uinput, or input grab is used.
-- Any future text buffer must remain in memory only and be cleared on focus changes, navigation, shortcuts, cancellation, and pause/quit.
+- Any text buffer must remain in memory only and be cleared on focus changes, navigation, shortcuts, cancellation, and pause/quit. The opt-in XI2 focus event API is a metadata source for a future session adapter; it is not yet wired to the typing buffer.
 - X11 does not offer reliable per-application isolation or reliable password-field detection. Users requiring strict isolation should keep X11 event observation disabled.
 
 ## Project layout

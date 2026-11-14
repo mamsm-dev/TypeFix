@@ -1,9 +1,14 @@
 use std::{
     io::Write,
     process::{Command, Stdio},
+    sync::Mutex,
     thread,
     time::{Duration, Instant},
 };
+
+// These integration tests share one Xvfb server and mutate its global XKB/focus state.
+static X11_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 use x11rb::{
     connection::Connection,
     protocol::{
@@ -25,6 +30,7 @@ fn run_xdotool(args: &[&str]) {
 
 #[test]
 fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
+    let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     // Generate a two-group map. It is loaded onto the XI2 source keyboard
     // after the first event reveals the actual device ID used by Xvfb.
     let map = Command::new("setxkbmap")
@@ -174,6 +180,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
 
 #[test]
 fn xvfb_xi2_focus_selection_on_root_observes_child_focus_transitions() {
+    let _guard = X11_TEST_LOCK.lock().unwrap();
     let (connection, screen) = x11rb::connect(None).expect("connect to Xvfb");
     let version = connection.xinput_xi_query_version(2, 0).unwrap().reply().unwrap();
     assert!(version.major_version >= 2, "XInput2 2.0 is required");
@@ -234,4 +241,75 @@ fn xvfb_xi2_focus_selection_on_root_observes_child_focus_transitions() {
         saw_root_focus_event,
         "selecting XI2 FocusIn/FocusOut on root did not report a child focus transition; observed: {observed:?}"
     );
+}
+
+#[test]
+fn x11_session_api_polls_root_propagated_focus_transitions() {
+    let _guard = X11_TEST_LOCK.lock().unwrap();
+    use typefix_core::x11::{X11SessionConnection, X11SessionEvent};
+
+    let layout = Command::new("setxkbmap")
+        .args(["-layout", "us,ir"])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(layout.success(), "could not set deterministic XKB layout");
+
+    let session = X11SessionConnection::connect().expect("connect X11 session API");
+    session.subscribe_session_events().expect("subscribe to XI2 key and focus events");
+
+    let (client, screen) = x11rb::connect(None).expect("connect second X11 client");
+    let root = client.setup().roots[screen].root;
+    let child = client.generate_id().unwrap();
+    client.create_window(
+        0,
+        child,
+        root,
+        0,
+        0,
+        100,
+        60,
+        0,
+        WindowClass::INPUT_OUTPUT,
+        0,
+        &CreateWindowAux::new(),
+    ).unwrap().check().unwrap();
+    client.map_window(child).unwrap().check().unwrap();
+    client.set_input_focus(InputFocus::PARENT, child, x11rb::CURRENT_TIME).unwrap().check().unwrap();
+    client.flush().unwrap();
+    let focus_deadline = Instant::now() + Duration::from_secs(3);
+    let mut observed_focus = false;
+    while Instant::now() < focus_deadline && !observed_focus {
+        if let Some(event) = session.poll_for_session_event().expect("poll focus event") {
+            if let X11SessionEvent::Focus(focus) = event {
+                observed_focus = focus.event_window == root;
+            }
+        } else {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    // Send the key while focus is explicitly on the root window. The test
+    // separately verifies focus propagation from the child and key delivery
+    // from the root, without assuming all child-window key events propagate.
+    client.set_input_focus(InputFocus::PARENT, root, x11rb::CURRENT_TIME).unwrap().check().unwrap();
+    client.flush().unwrap();
+    run_xdotool(&["key", "a"]);
+
+    let key_deadline = Instant::now() + Duration::from_secs(3);
+    let mut observed_key_press = false;
+    while Instant::now() < key_deadline && !observed_key_press {
+        if let Some(event) = session.poll_for_session_event().expect("poll key event") {
+            if let X11SessionEvent::Key(key) = event {
+                observed_key_press = key.pressed && key.keycode == 38;
+            }
+        } else {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    client.destroy_window(child).unwrap().check().unwrap();
+    client.flush().unwrap();
+
+    assert!(observed_focus, "session API did not expose a root-propagated XI2 focus event");
+    assert!(observed_key_press, "combined session subscription did not deliver the root-focused key press");
 }

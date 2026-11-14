@@ -188,6 +188,27 @@ pub struct X11KeyEvent {
     pub effective_group: u8,
 }
 
+/// An XI2 focus transition observed on the root window.
+/// `event_window` is the window on which the event was selected; it is not
+/// necessarily the focused client window. `child_window` is the reported
+/// child (zero means no child was reported).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct X11FocusEvent {
+    pub device_id: u16,
+    pub source_id: u16,
+    pub timestamp: u32,
+    pub focused: bool,
+    pub event_window: u32,
+    pub child_window: u32,
+}
+
+/// A single event from the opt-in X11 session event stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum X11SessionEvent {
+    Key(X11KeyEvent),
+    Focus(X11FocusEvent),
+}
+
 pub struct X11SessionConnection {
     connection: RustConnection,
     pub screen_number: usize,
@@ -269,6 +290,132 @@ impl X11SessionConnection {
         self.connection
             .flush()
             .map_err(|e| format!("could not flush XI2 device event selection: {e}"))
+    }
+
+    /// Explicitly subscribes to XI2 focus transitions propagated through the root window.
+    ///
+    /// Focus events are metadata only and must be forwarded to the session as a
+    /// reset signal. They do not identify password fields or provide strong
+    /// application isolation. This subscription is opt-in.
+    pub fn subscribe_focus_events(&self) -> Result<(), String> {
+        let root = self.connection.setup().roots[self.screen_number].root;
+        let mask = XIEventMask::FOCUS_IN | XIEventMask::FOCUS_OUT;
+        self.connection
+            .xinput_xi_select_events(
+                root,
+                &[EventMask {
+                    deviceid: 1, // XIAllMasterDevices
+                    mask: vec![mask],
+                }],
+            )
+            .map_err(|e| format!("could not select XI2 focus events: {e}"))?
+            .check()
+            .map_err(|e| format!("X server rejected XI2 focus event selection: {e}"))?;
+        self.connection
+            .flush()
+            .map_err(|e| format!("could not flush XI2 focus event selection: {e}"))
+    }
+
+    /// Selects key press/release and focus-in/out events in one XI2 request.
+    ///
+    /// Use this when consuming `poll_for_session_event()` or
+    /// `wait_for_session_event()`. XI2 event selections are per device/window;
+    /// issuing separate key-only and focus-only selections can replace the
+    /// previous mask, so this combined method is the safe option for a session.
+    pub fn subscribe_session_events(&self) -> Result<(), String> {
+        let root = self.connection.setup().roots[self.screen_number].root;
+        let mask = XIEventMask::KEY_PRESS
+            | XIEventMask::KEY_RELEASE
+            | XIEventMask::FOCUS_IN
+            | XIEventMask::FOCUS_OUT;
+        self.connection
+            .xinput_xi_select_events(
+                root,
+                &[EventMask {
+                    deviceid: 1, // XIAllMasterDevices
+                    mask: vec![mask],
+                }],
+            )
+            .map_err(|e| format!("could not select XI2 session events: {e}"))?
+            .check()
+            .map_err(|e| format!("X server rejected XI2 session event selection: {e}"))?;
+        self.connection
+            .flush()
+            .map_err(|e| format!("could not flush XI2 session event selection: {e}"))
+    }
+
+    /// Polls one event from the opt-in X11 session stream without blocking.
+    ///
+    /// Returns `None` when no subscribed key/focus event is currently queued.
+    pub fn poll_for_session_event(&self) -> Result<Option<X11SessionEvent>, String> {
+        loop {
+            let Some(event) = self.connection.poll_for_event()
+                .map_err(|e| format!("X11 event poll failed: {e}"))? else {
+                return Ok(None);
+            };
+            let decoded = match event {
+                Event::XinputKeyPress(event) => {
+                    let keycode = u8::try_from(event.detail)
+                        .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
+                    Some(X11SessionEvent::Key(X11KeyEvent {
+                        keycode,
+                        device_id: event.deviceid,
+                        source_id: event.sourceid,
+                        timestamp: event.time,
+                        pressed: true,
+                        effective_modifiers: event.mods.effective,
+                        effective_group: event.group.effective,
+                    }))
+                }
+                Event::XinputKeyRelease(event) => {
+                    let keycode = u8::try_from(event.detail)
+                        .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
+                    Some(X11SessionEvent::Key(X11KeyEvent {
+                        keycode,
+                        device_id: event.deviceid,
+                        source_id: event.sourceid,
+                        timestamp: event.time,
+                        pressed: false,
+                        effective_modifiers: event.mods.effective,
+                        effective_group: event.group.effective,
+                    }))
+                }
+                Event::XinputFocusIn(event) => Some(X11SessionEvent::Focus(X11FocusEvent {
+                    device_id: event.deviceid,
+                    source_id: event.sourceid,
+                    timestamp: event.time,
+                    focused: true,
+                    event_window: event.event,
+                    child_window: event.child,
+                })),
+                Event::XinputFocusOut(event) => Some(X11SessionEvent::Focus(X11FocusEvent {
+                    device_id: event.deviceid,
+                    source_id: event.sourceid,
+                    timestamp: event.time,
+                    focused: false,
+                    event_window: event.event,
+                    child_window: event.child,
+                })),
+                _ => None,
+            };
+            if decoded.is_some() {
+                return Ok(decoded);
+            }
+        }
+    }
+
+    /// Waits for the next subscribed key or focus event.
+    ///
+    /// Use one event loop with this method after enabling the corresponding
+    /// subscriptions; separate blocking wait methods on the same connection
+    /// would consume and discard each other's event types.
+    pub fn wait_for_session_event(&self) -> Result<X11SessionEvent, String> {
+        loop {
+            if let Some(event) = self.poll_for_session_event()? {
+                return Ok(event);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
     }
 
     /// Waits for a focus-propagated XI2 key event and returns the server's
