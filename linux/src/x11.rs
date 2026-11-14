@@ -725,9 +725,16 @@ mod tests {
             keymap.session_event_for_key(&event(38, 1), &mut compose),
             Some(crate::session::SessionEvent::Text("A".into()))
         );
-        assert_eq!(
-            keymap.session_event_for_key(&event(38, 1 << 2), &mut compose),
-            Some(crate::session::SessionEvent::Shortcut)
+        for modifier in [1 << 2, 1 << 3, 1 << 6] {
+            assert_eq!(
+                keymap.session_event_for_key(&event(38, modifier), &mut compose),
+                Some(crate::session::SessionEvent::Shortcut)
+            );
+        }
+        assert_ne!(
+            keymap.session_event_for_key(&event(38, 1 << 7), &mut compose),
+            Some(crate::session::SessionEvent::Shortcut),
+            "AltGr/Mod5 must remain available for text input"
         );
         let release = X11KeyEvent { pressed: false, ..event(38, 0) };
         assert_eq!(keymap.session_event_for_key(&release, &mut compose), None);
