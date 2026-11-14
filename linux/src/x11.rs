@@ -1,10 +1,11 @@
 //! X11 session preflight, XKB keymap translation, and opt-in raw key observation.
 //!
-//! Raw observation is deliberately separate from text translation: XI2 raw key
-//! events contain keycodes, not the active modifier/group snapshot. No text is
-//! decoded, logged, persisted, or injected by this module.
+//! Event observation is separate from text translation: XI2 raw key events
+//! contain keycodes, not the active modifier/group snapshot. The explicit
+//! translator can decode one device event in memory; observation itself never
+//! logs, persists, or injects text.
 
-use std::{ffi::OsStr, process::Command};
+use std::process::Command;
 
 use crate::compose::{ComposeOutcome, ComposeProcessor};
 use x11rb::{
