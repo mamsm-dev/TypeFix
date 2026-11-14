@@ -40,6 +40,22 @@ impl ComposeProcessor {
         Ok(Self { _context: context, state })
     }
 
+    /// Build a processor from an explicit Compose table. Kept crate-visible
+    /// for deterministic adapter tests; production should use the user's locale.
+    pub(crate) fn from_buffer(buffer: &str, locale: &str) -> Result<Self, String> {
+        let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
+        let table = xkb::compose::Table::new_from_buffer(
+            &context,
+            buffer,
+            locale,
+            xkb::compose::FORMAT_TEXT_V1,
+            xkb::compose::COMPILE_NO_FLAGS,
+        )
+        .map_err(|_| "could not compile the supplied XKB Compose table".to_owned())?;
+        let state = xkb::compose::State::new(&table, xkb::compose::STATE_NO_FLAGS);
+        Ok(Self { state, _context: context })
+    }
+
     /// Feed one key symbol from a key-press event.
     ///
     /// When no sequence is active, an ignored keysym is returned as
