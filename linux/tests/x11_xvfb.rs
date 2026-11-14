@@ -113,8 +113,8 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     ).unwrap().check().unwrap();
     connection.flush().unwrap();
     let state_after = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
-    eprintln!("XKB group after lock on XI2 source device {}: {:?}", source_keyboard_id, state_after.group);
-    assert_eq!(state_after.group, Group::from(1), "XKB source keyboard did not lock to group 1");
+    eprintln!("XKB group after lock on XI2 master device {}: {:?}", master_keyboard_id, state_after.group);
+    assert_eq!(state_after.group, Group::from(1), "XKB master keyboard did not lock to group 1");
 
     // Use the XTEST 2.2 device-aware request so the synthetic key is sent to
     // the exact XI2 source keyboard whose XKB group was locked above.
