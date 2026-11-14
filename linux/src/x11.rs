@@ -133,6 +133,48 @@ impl XkbKeymap {
         }
     }
 
+    /// Convert a translated key press into a backend-neutral typing-session event.
+    ///
+    /// This classifies editing/navigation keys before Compose and routes
+    /// Control/Alt/Super-modified input to the shortcut reset path. Modifier
+    /// bits use the standard XKB core positions (Control=2, Mod1=3, Mod4=6);
+    /// AltGr/Mod5 is intentionally not treated as a shortcut so it remains
+    /// available for printable symbols.
+    pub fn session_event_for_key(
+        &self,
+        event: &X11KeyEvent,
+        compose: &mut ComposeProcessor,
+    ) -> Option<crate::session::SessionEvent> {
+        if !event.pressed {
+            return None;
+        }
+
+        const SHORTCUT_MODIFIERS: u32 = (1 << 2) | (1 << 3) | (1 << 6);
+        if event.effective_modifiers & SHORTCUT_MODIFIERS != 0 {
+            return Some(crate::session::SessionEvent::Shortcut);
+        }
+
+        let mut state = xkb::State::new(&self.keymap);
+        state.update_mask(event.effective_modifiers, 0, 0, u32::from(event.effective_group), 0, 0);
+        let keycode = xkb::Keycode::new(u32::from(event.keycode));
+        let keysym = u32::from(state.key_get_one_sym(keycode));
+
+        match keysym {
+            0xff08 => Some(crate::session::SessionEvent::Backspace),
+            0xff09 if event.effective_modifiers & 1 != 0 => Some(crate::session::SessionEvent::Navigation),
+            0xff09 => Some(crate::session::SessionEvent::Tab),
+            0x0020 => Some(crate::session::SessionEvent::Space),
+            0xfe20 | 0xff0d | 0xff1b | 0xffff | 0xff50..=0xff57 | 0xff63 | 0xffbe..=0xffe0 => {
+                Some(crate::session::SessionEvent::Navigation)
+            }
+            _ => match self.translate_event(event, compose) {
+                X11TextOutcome::Text(text) => Some(crate::session::SessionEvent::Text(text)),
+                X11TextOutcome::Cancelled => Some(crate::session::SessionEvent::Reset),
+                X11TextOutcome::NoText | X11TextOutcome::Composing => None,
+            },
+        }
+    }
+
     /// Translate an X11 keycode using the requested XKB layout group and
     /// modifier mask. X11 keycodes are already in the XKB keycode namespace;
     /// do not add the evdev +8 offset a second time.
@@ -595,6 +637,60 @@ mod tests {
 
         let release = X11KeyEvent { pressed: false, ..event };
         assert_eq!(keymap.translate_event(&release, &mut compose), X11TextOutcome::NoText);
+    }
+
+    #[test]
+    fn classifies_special_and_shortcut_keys_for_typing_session() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/Persian keymap compiles");
+        let mut compose = ComposeProcessor::from_buffer("", "en_US.UTF-8")
+            .expect("empty deterministic Compose table compiles");
+        let event = |keycode, modifiers| X11KeyEvent {
+            keycode,
+            device_id: 2,
+            source_id: 2,
+            timestamp: 1,
+            pressed: true,
+            effective_modifiers: modifiers,
+            effective_group: 0,
+        };
+
+        assert_eq!(
+            keymap.session_event_for_key(&event(22, 0), &mut compose),
+            Some(crate::session::SessionEvent::Backspace)
+        );
+        assert_eq!(
+            keymap.session_event_for_key(&event(23, 0), &mut compose),
+            Some(crate::session::SessionEvent::Tab)
+        );
+        assert_eq!(
+            keymap.session_event_for_key(&event(23, 1), &mut compose),
+            Some(crate::session::SessionEvent::Navigation)
+        );
+        assert_eq!(
+            keymap.session_event_for_key(&event(65, 0), &mut compose),
+            Some(crate::session::SessionEvent::Space)
+        );
+        assert_eq!(
+            keymap.session_event_for_key(&event(113, 0), &mut compose),
+            Some(crate::session::SessionEvent::Navigation)
+        );
+        assert_eq!(
+            keymap.session_event_for_key(&event(38, 1), &mut compose),
+            Some(crate::session::SessionEvent::Text("A".into()))
+        );
+        assert_eq!(
+            keymap.session_event_for_key(&event(38, 1 << 2), &mut compose),
+            Some(crate::session::SessionEvent::Shortcut)
+        );
+        let release = X11KeyEvent { pressed: false, ..event(38, 0) };
+        assert_eq!(keymap.session_event_for_key(&release, &mut compose), None);
     }
 
     #[test]
