@@ -26,7 +26,7 @@ The `compose` module wraps `libxkbcommon`'s locale-specific Compose state machin
 - Cancelled sequences are discarded, and callers can explicitly reset pending composition.
 - The adapter must reset Compose state on focus changes, navigation, cancellation, disable, and keymap/locale replacement.
 
-The Compose processor is currently an isolated, in-memory component. It does not subscribe to events, decode or retain a typed history, log text, or inject text. Its tests use a tiny deterministic Compose table, so they do not depend on the host's locale files.
+The Compose processor is currently an isolated, in-memory component. The XKB layer exposes an explicit per-event translator that takes an XI2 device-event modifier/group snapshot, obtains the keysym, feeds Compose first, and returns only committed text. Neither component subscribes to events, retains a typed history, logs text, or injects text. The translator is not yet connected to the live event loop or `TypingSession`. Compose tests use a tiny deterministic table and do not depend on the host's locale files.
 
 ## Adapter contract
 
@@ -42,6 +42,6 @@ A complete desktop adapter must:
 
 ## Current boundary
 
-The X11 layer now has an opt-in XI2 device-event path that receives modifier/group snapshots from the server. The isolated Xvfb integration test verifies delivery of key press/release events and checks the effective Shift modifier and group 0 snapshot. It does not validate every keyboard layout or a real desktop compositor/session. The implementation still does not decode text, detect focus changes reliably, display a tray icon or popup, or replace text. The XKB compiler rebuilds from RMLVO configuration returned by `setxkbmap -query`; custom server-side keymap modifications may not be represented exactly.
+The X11 layer now has an opt-in XI2 device-event path that receives modifier/group snapshots from the server. The isolated Xvfb integration test verifies delivery of key press/release events and checks the effective Shift modifier and group 0 snapshot. It does not validate every keyboard layout or a real desktop compositor/session. The implementation has an explicit per-event XKB/Compose translation primitive, but does not yet connect it to the live event loop or `TypingSession`; it also does not detect focus changes reliably, display a tray icon or popup, or replace text. The XKB compiler rebuilds from RMLVO configuration returned by `setxkbmap -query`; custom server-side keymap modifications may not be represented exactly.
 
 X11 clients with access to the same X server do not have strong per-application input isolation. Reliable password-field detection must not be claimed. Users who require stronger isolation should disable X11 event observation; Wayland remains planned through IBus input-method integration.
