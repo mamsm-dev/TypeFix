@@ -550,3 +550,70 @@ fn x11_foreground_session_loop_reports_suggestion_to_callback() {
 
     std::fs::remove_dir_all(root_dir).unwrap();
 }
+
+#[test]
+fn x11_xvfb_session_loop_preserves_repeated_key_presses() {
+    let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    use std::sync::{Arc, Mutex};
+    use typefix_core::{
+        compose::ComposeProcessor,
+        session::{ComposedTypingSession, SessionAction},
+        Dictionaries, Language, LayoutMap, Suggestion,
+    };
+    use typefix_core::x11::X11SessionConnection;
+
+    let layout = Command::new("setxkbmap")
+        .args(["-layout", "us,ir"])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(layout.success(), "could not set deterministic US/Persian layout");
+
+    let root_dir = std::env::temp_dir().join(format!("typefix-x11-repeat-{}", std::process::id()));
+    std::fs::create_dir_all(&root_dir).unwrap();
+    std::fs::write(root_dir.join("en"), "hello\nworld\nwant\n").unwrap();
+    std::fs::write(root_dir.join("fa"), "سلام\nسسسلام\nدنیا\n").unwrap();
+    let dicts = Dictionaries::load(root_dir.join("en"), root_dir.join("fa")).unwrap();
+    let mut map = LayoutMap::default();
+    for (from, to) in [('s', "س"), ('g', "ل"), ('h', "ا"), ('l', "م")] {
+        map.insert(from, to);
+    }
+    let compose = ComposeProcessor::new(std::ffi::OsStr::new("en_US.UTF-8"))
+        .expect("system Compose table is available in CI");
+    let mut typing = ComposedTypingSession::new(compose);
+    let mut connection = X11SessionConnection::connect().expect("connect X11 session API");
+    let (client, screen) = x11rb::connect(None).expect("connect X11 test client");
+    let root = client.setup().roots[screen].root;
+    client.set_input_focus(InputFocus::PARENT, root, x11rb::CURRENT_TIME).unwrap().check().unwrap();
+    client.flush().unwrap();
+
+    let result = Arc::new(Mutex::new(None::<Suggestion>));
+    let callback_result = Arc::clone(&result);
+    let stop_result = Arc::clone(&result);
+    let producer = thread::spawn(|| {
+        thread::sleep(Duration::from_millis(150));
+        // Two consecutive 's' presses model a repeat transition. Both must
+        // reach the session; release events are ignored for text purposes.
+        run_xdotool(&["type", "--clearmodifiers", "--delay", "1", "ssghl"]);
+        run_xdotool(&["key", "space"]);
+    });
+
+    connection.run_session_loop(
+        &mut typing,
+        &dicts,
+        Language::English,
+        &map,
+        move |action| {
+            if let SessionAction::Suggestion(suggestion) = action {
+                *callback_result.lock().unwrap() = Some(suggestion);
+            }
+        },
+        move || stop_result.lock().unwrap().is_some(),
+    ).expect("session loop exits after repeated-character suggestion");
+
+    producer.join().unwrap();
+    let suggestion = result.lock().unwrap().clone().expect("suggestion callback invoked");
+    assert_eq!(suggestion.original, "ssghl");
+    assert_eq!(suggestion.converted, "سسسلام");
+
+    std::fs::remove_dir_all(root_dir).unwrap();
+}
