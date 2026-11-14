@@ -349,3 +349,74 @@ fn xkb_map_notifications_allow_keymap_refresh() {
     session.refresh_keymap().expect("refresh compiled XKB keymap");
     assert_eq!(session.keymap.layout_count(), 2);
 }
+
+#[test]
+fn x11_session_dispatch_clears_typing_and_compose_on_focus_change() {
+    let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    use typefix_core::{
+        compose::ComposeProcessor,
+        session::{ComposedTypingSession, SessionAction, SessionEvent},
+        Dictionaries, Language, LayoutMap,
+    };
+    use typefix_core::x11::{X11FocusEvent, X11SessionConnection, X11SessionEvent};
+
+    let layout = Command::new("setxkbmap")
+        .args(["-layout", "us,ir"])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(layout.success(), "could not set deterministic XKB layout");
+
+    let root = std::env::temp_dir().join(format!("typefix-x11-dispatch-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("en"), "hello\nworld\nwant\n").unwrap();
+    std::fs::write(root.join("fa"), "سلام\nدنیا\n").unwrap();
+    let dicts = Dictionaries::load(root.join("en"), root.join("fa")).unwrap();
+    let mut map = LayoutMap::default();
+    for (from, to) in [('s', "س"), ('g', "ل"), ('h', "ا"), ('l', "م")] {
+        map.insert(from, to);
+    }
+
+    let compose = ComposeProcessor::from_buffer(
+        "<dead_acute> <e> : \"é\" eacute\n",
+        "en_US.UTF-8",
+    ).expect("deterministic Compose table compiles");
+    let mut typing = ComposedTypingSession::new(compose);
+    for ch in "sghl".chars() {
+        typing.handle(SessionEvent::Text(ch.to_string()), &dicts, Language::English, &map);
+    }
+    assert!(matches!(
+        typing.handle(SessionEvent::Space, &dicts, Language::English, &map),
+        SessionAction::Suggestion(_)
+    ));
+    assert_eq!(
+        typing.compose_mut().feed(xkbcommon::xkb::keysym_from_name(
+            "dead_acute",
+            xkbcommon::xkb::KEYSYM_NO_FLAGS,
+        )),
+        typefix_core::compose::ComposeOutcome::Composing
+    );
+
+    let mut connection = X11SessionConnection::connect().expect("connect X11 session API");
+    let focus = X11FocusEvent {
+        device_id: 3,
+        source_id: 5,
+        timestamp: 1,
+        focused: false,
+        event_window: 1,
+        child_window: 0,
+    };
+    assert_eq!(
+        connection.handle_session_event(
+            &mut typing,
+            X11SessionEvent::Focus(focus),
+            &dicts,
+            Language::English,
+            &map,
+        ).unwrap(),
+        SessionAction::None
+    );
+    assert!(typing.suggestion().is_none());
+    assert!(!typing.is_composing());
+
+    std::fs::remove_dir_all(root).unwrap();
+}
