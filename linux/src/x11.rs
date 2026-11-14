@@ -925,6 +925,34 @@ mod tests {
     }
 
     #[test]
+    fn verifies_physical_keys_for_english_persian_conversion_pair() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/Persian XKB keymap compiles");
+
+        // The physical S-G-H-L sequence must produce "sghl" in US
+        // and "سلام" in the Persian group. This checks the real XKB
+        // layout data rather than a hand-built LayoutMap fixture.
+        let keycodes = [39, 42, 43, 46];
+        let english: String = keycodes
+            .iter()
+            .map(|code| keymap.translate_keycode(*code, 0, 0).unwrap())
+            .collect();
+        let persian: String = keycodes
+            .iter()
+            .map(|code| keymap.translate_keycode(*code, 1, 0).unwrap())
+            .collect();
+
+        assert_eq!(english, "sghl");
+        assert_eq!(persian, "سلام");
+    }
+
+    #[test]
     fn translates_qwertz_physical_keys_in_german_layout_group() {
         let config = XkbConfig {
             rules: "evdev".into(),
