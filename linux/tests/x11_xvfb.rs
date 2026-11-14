@@ -1,9 +1,14 @@
 use std::{
     io::Write,
     process::{Command, Stdio},
+    sync::Mutex,
     thread,
     time::{Duration, Instant},
 };
+
+// These integration tests share one Xvfb server and mutate its global XKB/focus state.
+static X11_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 use x11rb::{
     connection::Connection,
     protocol::{
@@ -25,6 +30,7 @@ fn run_xdotool(args: &[&str]) {
 
 #[test]
 fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
+    let _guard = X11_TEST_LOCK.lock().unwrap();
     // Generate a two-group map. It is loaded onto the XI2 source keyboard
     // after the first event reveals the actual device ID used by Xvfb.
     let map = Command::new("setxkbmap")
@@ -174,6 +180,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
 
 #[test]
 fn xvfb_xi2_focus_selection_on_root_observes_child_focus_transitions() {
+    let _guard = X11_TEST_LOCK.lock().unwrap();
     let (connection, screen) = x11rb::connect(None).expect("connect to Xvfb");
     let version = connection.xinput_xi_query_version(2, 0).unwrap().reply().unwrap();
     assert!(version.major_version >= 2, "XInput2 2.0 is required");
@@ -238,6 +245,7 @@ fn xvfb_xi2_focus_selection_on_root_observes_child_focus_transitions() {
 
 #[test]
 fn x11_session_api_polls_root_propagated_focus_transitions() {
+    let _guard = X11_TEST_LOCK.lock().unwrap();
     use typefix_core::x11::{X11SessionConnection, X11SessionEvent};
 
     let layout = Command::new("setxkbmap")
