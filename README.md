@@ -2,7 +2,7 @@
 
 TypeFix is an English ⇄ Persian keyboard-layout mistake detector for Linux. The Linux port is under active development and is **not yet a complete desktop application**.
 
-It currently contains the shared detection core, a backend-neutral typing-session state machine, X11/XInput2 connection and event-observation primitives, and XKB keymap compilation. It does not yet decode live text, show suggestions, or replace text in applications.
+It currently contains the shared detection core, a backend-neutral typing-session state machine, X11/XInput2 connection and event-observation primitives, XKB keymap compilation, and an explicit in-memory key-event text/Compose translator. The translator is not yet wired into a live typing session; suggestions and text replacement in applications are not implemented.
 
 ## Current status
 
@@ -14,7 +14,7 @@ It currently contains the shared detection core, a backend-neutral typing-sessio
 | XKB keymap compilation and layout groups | Implemented; server-side custom keymap parity still needs validation |
 | Opt-in XI2 raw key observer | Implemented; keycodes and metadata only |
 | Opt-in XI2 device-event observer | Implemented; effective modifier/group snapshots verified under Xvfb; real desktop validation pending |
-| Text decoding and compose/dead keys | Not implemented |
+| XKB key-event text translation and Compose/dead keys | Implemented as an explicit in-memory primitive; not wired into the live session |
 | Focus tracking and secure-input handling | Not implemented |
 | Suggestion popup, tray/menu UI, and safe replacement | Not implemented |
 | Wayland / IBus | Planned |
@@ -64,7 +64,7 @@ The probe checks the X11 connection, XInput2, and XKB configuration. It does **n
 ## Privacy and security
 
 - No typed text is logged, persisted, or transmitted by the current X11 observer.
-- The current event layer returns key/event metadata only; text decoding is not enabled.
+- The event-observation layer returns key/event metadata only. A separate explicit translator can decode a supplied XI2 device-event snapshot in memory, but it is not started automatically or connected to a live session.
 - No root service, raw evdev access, uinput, or input grab is used.
 - Any future text buffer must remain in memory only and be cleared on focus changes, navigation, shortcuts, cancellation, and pause/quit.
 - X11 does not offer reliable per-application isolation or reliable password-field detection. Users requiring strict isolation should keep X11 event observation disabled.

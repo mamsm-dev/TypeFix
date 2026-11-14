@@ -1,10 +1,13 @@
 //! X11 session preflight, XKB keymap translation, and opt-in raw key observation.
 //!
-//! Raw observation is deliberately separate from text translation: XI2 raw key
-//! events contain keycodes, not the active modifier/group snapshot. No text is
-//! decoded, logged, persisted, or injected by this module.
+//! Event observation is separate from text translation: XI2 raw key events
+//! contain keycodes, not the active modifier/group snapshot. The explicit
+//! translator can decode one device event in memory; observation itself never
+//! logs, persists, or injects text.
 
 use std::process::Command;
+
+use crate::compose::{ComposeOutcome, ComposeProcessor};
 use x11rb::{
     connection::Connection,
     protocol::{
@@ -93,6 +96,41 @@ pub struct XkbKeymap {
 }
 
 impl XkbKeymap {
+    /// Translate one XI2 device key event through XKB and Compose.
+    ///
+    /// The caller must invoke this only for key presses, pass the server's
+    /// effective modifier/group snapshot, and reset Compose on focus changes,
+    /// navigation, cancellation, disable, and keymap/locale replacement.
+    /// This helper does not subscribe to events or retain text between calls.
+    pub fn translate_event(
+        &self,
+        event: &X11KeyEvent,
+        compose: &mut ComposeProcessor,
+    ) -> X11TextOutcome {
+        if !event.pressed {
+            return X11TextOutcome::NoText;
+        }
+
+        let mut state = xkb::State::new(&self.keymap);
+        state.update_mask(event.effective_modifiers, 0, 0, u32::from(event.effective_group), 0, 0);
+        let keycode = xkb::Keycode::new(u32::from(event.keycode));
+        let keysym = state.key_get_one_sym(keycode);
+
+        match compose.feed(keysym) {
+            ComposeOutcome::Composing => X11TextOutcome::Composing,
+            ComposeOutcome::Committed(text) => X11TextOutcome::Text(text),
+            ComposeOutcome::Cancelled => X11TextOutcome::Cancelled,
+            ComposeOutcome::Passthrough => {
+                let text = state.key_get_utf8(keycode);
+                if text.is_empty() || text.chars().any(char::is_control) {
+                    X11TextOutcome::NoText
+                } else {
+                    X11TextOutcome::Text(text)
+                }
+            }
+        }
+    }
+
     /// Translate an X11 keycode using the requested XKB layout group and
     /// modifier mask. X11 keycodes are already in the XKB keycode namespace;
     /// do not add the evdev +8 offset a second time.
@@ -116,6 +154,16 @@ impl XkbKeymap {
     pub fn layout_count(&self) -> u32 {
         self.keymap.num_layouts()
     }
+}
+
+/// Result of translating one XI2 device key event. Text exists only in this
+/// return value; callers must keep it in memory and must never log or persist it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum X11TextOutcome {
+    NoText,
+    Composing,
+    Text(String),
+    Cancelled,
 }
 
 /// A key transition observed from XI2. It intentionally contains no decoded text.
@@ -269,6 +317,60 @@ impl X11SessionConnection {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn translates_event_text_with_server_modifier_snapshot() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("xkb-data and libxkbcommon installed");
+        let mut compose = ComposeProcessor::from_buffer("", "en_US.UTF-8")
+            .expect("empty deterministic Compose table compiles");
+        let event = X11KeyEvent {
+            keycode: 38,
+            device_id: 2,
+            source_id: 2,
+            timestamp: 1,
+            pressed: true,
+            effective_modifiers: 1,
+            effective_group: 0,
+        };
+        assert_eq!(keymap.translate_event(&event, &mut compose), X11TextOutcome::Text("A".into()));
+
+        let release = X11KeyEvent { pressed: false, ..event };
+        assert_eq!(keymap.translate_event(&release, &mut compose), X11TextOutcome::NoText);
+    }
+
+    #[test]
+    fn translates_dead_key_sequence_before_plain_text() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into()],
+            variants: vec!["intl".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("us intl keymap compiles");
+        let mut compose = ComposeProcessor::from_buffer(
+            "<dead_acute> <e> : \"é\" eacute\n",
+            "en_US.UTF-8",
+        )
+        .expect("deterministic Compose table compiles");
+
+        // X11 keycode 48 is the apostrophe/dead-acute key in us(intl);
+        // keycode 26 is the physical E key.
+        let dead_acute = X11KeyEvent {
+            keycode: 48, device_id: 2, source_id: 2, timestamp: 1,
+            pressed: true, effective_modifiers: 0, effective_group: 0,
+        };
+        let e = X11KeyEvent { keycode: 26, timestamp: 2, ..dead_acute };
+        assert_eq!(keymap.translate_event(&dead_acute, &mut compose), X11TextOutcome::Composing);
+        assert_eq!(keymap.translate_event(&e, &mut compose), X11TextOutcome::Text("é".into()));
+    }
 
     #[test]
     fn parses_multiple_layouts_and_options() {
