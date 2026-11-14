@@ -326,8 +326,7 @@ impl X11SessionConnection {
             let event = self.connection.wait_for_event()
                 .map_err(|e| format!("X11 event wait failed: {e}"))?;
             match event {
-                Event::XinputKeyPress(event) | Event::XinputKeyRelease(event) => {
-                    let pressed = matches!(event, Event::XinputKeyPress(_));
+                Event::XinputKeyPress(event) => {
                     let keycode = u8::try_from(event.detail)
                         .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
                     return Ok(X11SessionEvent::Key(X11KeyEvent {
@@ -335,7 +334,20 @@ impl X11SessionConnection {
                         device_id: event.deviceid,
                         source_id: event.sourceid,
                         timestamp: event.time,
-                        pressed,
+                        pressed: true,
+                        effective_modifiers: event.mods.effective,
+                        effective_group: event.group.effective,
+                    }));
+                }
+                Event::XinputKeyRelease(event) => {
+                    let keycode = u8::try_from(event.detail)
+                        .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
+                    return Ok(X11SessionEvent::Key(X11KeyEvent {
+                        keycode,
+                        device_id: event.deviceid,
+                        source_id: event.sourceid,
+                        timestamp: event.time,
+                        pressed: false,
                         effective_modifiers: event.mods.effective,
                         effective_group: event.group.effective,
                     }));
