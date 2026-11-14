@@ -18,5 +18,5 @@ name = "typefix-x11-probe"
 path = "src/bin/x11_probe.rs"
 
 [dependencies]
-x11rb = { version = "0.13", features = ["xinput", "xkb"] }
+x11rb = { version = "0.13", features = ["xinput", "xkb", "xtest"] }
 xkbcommon = "0.9"
