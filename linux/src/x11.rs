@@ -137,9 +137,9 @@ impl XkbKeymap {
     ///
     /// This classifies editing/navigation keys before Compose and routes
     /// Control/Alt/Super-modified input to the shortcut reset path. Modifier
-    /// bits use the standard XKB core positions (Control=2, Mod1=3, Mod4=6);
-    /// AltGr/Mod5 is intentionally not treated as a shortcut so it remains
-    /// available for printable symbols.
+    /// names are resolved through the active XKB keymap, so custom Alt/Super
+    /// mappings are respected. AltGr/Mod5 is intentionally not treated as a
+    /// shortcut so it remains available for printable symbols.
     pub fn session_event_for_key(
         &self,
         event: &X11KeyEvent,
@@ -149,13 +149,18 @@ impl XkbKeymap {
             return None;
         }
 
-        const SHORTCUT_MODIFIERS: u32 = (1 << 2) | (1 << 3) | (1 << 6);
-        if event.effective_modifiers & SHORTCUT_MODIFIERS != 0 {
+        let mut state = xkb::State::new(&self.keymap);
+        state.update_mask(event.effective_modifiers, 0, 0, u32::from(event.effective_group), 0, 0);
+        // Resolve semantic modifier names through this keymap rather than
+        // assuming Alt/Super always occupy Mod1/Mod4 bit positions.
+        const SHORTCUT_MODIFIERS: [&str; 5] = ["Control", "Alt", "Super", "Meta", "Hyper"];
+        if SHORTCUT_MODIFIERS
+            .iter()
+            .any(|name| state.mod_name_is_active(name, xkb::STATE_MODS_EFFECTIVE))
+        {
             return Some(crate::session::SessionEvent::Shortcut);
         }
 
-        let mut state = xkb::State::new(&self.keymap);
-        state.update_mask(event.effective_modifiers, 0, 0, u32::from(event.effective_group), 0, 0);
         let keycode = xkb::Keycode::new(u32::from(event.keycode));
         let keysym = u32::from(state.key_get_one_sym(keycode));
 
@@ -720,9 +725,16 @@ mod tests {
             keymap.session_event_for_key(&event(38, 1), &mut compose),
             Some(crate::session::SessionEvent::Text("A".into()))
         );
-        assert_eq!(
-            keymap.session_event_for_key(&event(38, 1 << 2), &mut compose),
-            Some(crate::session::SessionEvent::Shortcut)
+        for modifier in [1 << 2, 1 << 3, 1 << 6] {
+            assert_eq!(
+                keymap.session_event_for_key(&event(38, modifier), &mut compose),
+                Some(crate::session::SessionEvent::Shortcut)
+            );
+        }
+        assert_ne!(
+            keymap.session_event_for_key(&event(38, 1 << 7), &mut compose),
+            Some(crate::session::SessionEvent::Shortcut),
+            "AltGr/Mod5 must remain available for text input"
         );
         let release = X11KeyEvent { pressed: false, ..event(38, 0) };
         assert_eq!(keymap.session_event_for_key(&release, &mut compose), None);
