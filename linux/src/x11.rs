@@ -200,6 +200,46 @@ impl XkbKeymap {
         (!text.is_empty() && !text.chars().any(char::is_control)).then_some(text)
     }
 
+    /// Build a character map between two physical XKB layout groups.
+    ///
+    /// Only unshifted printable keys with a single source character are
+    /// considered. If multiple physical keys produce the same source
+    /// character, that character is omitted rather than choosing an arbitrary
+    /// target. This keeps punctuation/dead-key ambiguities from silently
+    /// corrupting conversions. The caller must validate that both groups
+    /// correspond to the intended English/Persian pair before using the map.
+    pub fn layout_map(&self, source_group: u32, target_group: u32) -> crate::LayoutMap {
+        use std::collections::HashMap;
+
+        let mut candidates: HashMap<char, Option<String>> = HashMap::new();
+        for keycode in 8..=255 {
+            let Some(source) = self.translate_keycode(keycode, source_group, 0) else {
+                continue;
+            };
+            let mut chars = source.chars();
+            let Some(source_char) = chars.next() else { continue };
+            if chars.next().is_some() {
+                continue;
+            }
+            let Some(target) = self.translate_keycode(keycode, target_group, 0) else {
+                continue;
+            };
+
+            candidates
+                .entry(source_char)
+                .and_modify(|candidate| *candidate = None)
+                .or_insert(Some(target));
+        }
+
+        let mut map = crate::LayoutMap::default();
+        for (source, target) in candidates {
+            if let Some(target) = target {
+                map.insert(source, target);
+            }
+        }
+        map
+    }
+
     pub fn layout_count(&self) -> u32 {
         self.keymap.num_layouts()
     }
@@ -922,6 +962,23 @@ mod tests {
         // The active Persian group remains selected while the effective
         // modifier mask is passed through the same translation path.
         assert_eq!(keymap.translate_keycode(38, 1, 0).as_deref(), Some("ش"));
+    }
+
+    #[test]
+    fn builds_layout_maps_in_both_english_persian_directions() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/Persian XKB keymap compiles");
+
+        let to_persian = keymap.layout_map(0, 1);
+        let to_english = keymap.layout_map(1, 0);
+        assert_eq!(to_persian.convert("sghl"), "سلام");
+        assert_eq!(to_english.convert("سلام"), "sghl");
     }
 
     #[test]
