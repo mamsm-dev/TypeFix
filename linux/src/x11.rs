@@ -15,6 +15,7 @@ use x11rb::{
             ConnectionExt as XInputConnectionExt, EventMask, XIEventMask,
         },
         xkb as x11_xkb,
+        xkb::ConnectionExt as XkbConnectionExt,
         Event,
     },
     rust_connection::RustConnection,
@@ -375,6 +376,15 @@ impl X11SessionConnection {
     /// The caller should refresh the compiled XKB keymap after receiving
     /// `X11SessionEvent::KeymapChanged`. This subscription is explicit.
     pub fn subscribe_xkb_map_events(&self) -> Result<(), String> {
+        let version = self.connection
+            .xkb_use_extension(1, 0)
+            .map_err(|e| format!("XKB extension request failed: {e}"))?
+            .reply()
+            .map_err(|e| format!("XKB extension negotiation failed: {e}"))?;
+        if !version.supported {
+            return Err("XKB extension 1.0 or newer is required for map notifications".into());
+        }
+
         let map_parts = x11_xkb::MapPart::KEY_TYPES
             | x11_xkb::MapPart::KEY_SYMS
             | x11_xkb::MapPart::MODIFIER_MAP
