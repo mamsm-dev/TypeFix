@@ -479,6 +479,41 @@ impl X11SessionConnection {
         Ok(())
     }
 
+    /// Dispatch one observed X11 session event into the composed typing state.
+    ///
+    /// Focus and keymap changes clear both typing and Compose state. Key presses
+    /// are translated using the event-time modifier/group snapshot. Keymap
+    /// notifications also rebuild the XKB translator before returning.
+    ///
+    /// This method processes one event only; the caller owns the event loop,
+    /// subscription lifecycle, UI, and any eventual text replacement policy.
+    pub fn handle_session_event(
+        &mut self,
+        session: &mut crate::session::ComposedTypingSession,
+        event: X11SessionEvent,
+        dicts: &crate::Dictionaries,
+        source: crate::Language,
+        map: &crate::LayoutMap,
+    ) -> Result<crate::session::SessionAction, String> {
+        match event {
+            X11SessionEvent::Key(key) => {
+                if let Some(session_event) = self.keymap.session_event_for_key(&key, session.compose_mut()) {
+                    Ok(session.handle(session_event, dicts, source, map))
+                } else {
+                    Ok(crate::session::SessionAction::None)
+                }
+            }
+            X11SessionEvent::Focus(focus) => {
+                Ok(session.handle(focus.as_session_event(), dicts, source, map))
+            }
+            X11SessionEvent::KeymapChanged(change) => {
+                let action = session.handle(change.as_session_event(), dicts, source, map);
+                self.refresh_keymap()?;
+                Ok(action)
+            }
+        }
+    }
+
     /// Polls one event from the opt-in X11 session stream without blocking.
     ///
     /// Returns `None` when no subscribed key/focus event is currently queued.
