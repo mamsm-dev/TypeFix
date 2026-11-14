@@ -10,7 +10,7 @@ use x11rb::{
         xinput::{ConnectionExt as XInputConnectionExt, EventMask, XIEventMask},
         xkb::{ConnectionExt as XkbConnectionExt, Group},
         xtest::ConnectionExt as XTestConnectionExt,
-        xproto::{ConnectionExt as XprotoConnectionExt, CreateWindowAux, InputFocus, WindowClass, COPY_DEPTH_FROM_PARENT},
+        xproto::{ConnectionExt as XprotoConnectionExt, CreateWindowAux, InputFocus, WindowClass},
         Event,
     },
 };
@@ -188,7 +188,7 @@ fn xvfb_xi2_focus_selection_on_root_observes_child_focus_transitions() {
 
     let child = connection.generate_id().unwrap();
     connection.create_window(
-        COPY_DEPTH_FROM_PARENT,
+        0,
         child,
         root,
         0,
