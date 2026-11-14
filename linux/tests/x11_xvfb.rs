@@ -9,6 +9,7 @@ use x11rb::{
     protocol::{
         xinput::{ConnectionExt as XInputConnectionExt, EventMask, XIEventMask},
         xkb::{ConnectionExt as XkbConnectionExt, Group},
+        xtest::ConnectionExt as XTestConnectionExt,
         Event,
     },
 };
@@ -91,7 +92,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     let loaded = loader.wait().expect("wait for xkbcomp");
     assert!(loaded.success(), "xkbcomp could not load the two-group map on XI2 source keyboard");
 
-    // Lock the same master keyboard into group 1 through the XKB protocol.
+    // Lock the same source keyboard into group 1 through the XKB protocol.
     // This is deterministic test setup, not a production layout-switch feature.
     let state_before = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
     eprintln!("XKB group before lock on XI2 source device {}: {:?}", source_keyboard_id, state_before.group);
@@ -107,8 +108,24 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     ).unwrap().check().unwrap();
     connection.flush().unwrap();
     let state_after = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
-    eprintln!("XKB group after lock on XI2 device {}: {:?}", source_keyboard_id, state_after.group);
-    run_xdotool(&["keycode", "38"]);
+    eprintln!("XKB group after lock on XI2 source device {}: {:?}", source_keyboard_id, state_after.group);
+    assert_eq!(state_after.group, Group::from(1), "XKB source keyboard did not lock to group 1");
+
+    // Use the XTEST 2.2 device-aware request so the synthetic key is sent to
+    // the exact XI2 source keyboard whose XKB group was locked above.
+    let xtest_version = connection.xtest_get_version(2, 2).unwrap().reply().unwrap();
+    assert!(
+        xtest_version.major_version > 2
+            || (xtest_version.major_version == 2 && xtest_version.minor_version >= 2),
+        "XTEST 2.2 device-aware input is required"
+    );
+    let xtest_device_id = u8::try_from(source_keyboard_id)
+        .expect("XTEST device IDs are represented as u8");
+    connection.xtest_fake_input(2, 38, 0, root, 0, 0, xtest_device_id)
+        .unwrap().check().unwrap();
+    connection.xtest_fake_input(3, 38, 0, root, 0, 0, xtest_device_id)
+        .unwrap().check().unwrap();
+    connection.flush().unwrap();
 
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut press_groups = Vec::new();
@@ -134,6 +151,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     }
     let final_state = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
     eprintln!("XKB group after synthetic key on XI2 source device {}: {:?}", source_keyboard_id, final_state.group);
+    assert_eq!(final_state.group, Group::from(1), "synthetic input unexpectedly changed the source keyboard group");
     assert!(press_groups.contains(&1), "XI2 did not report Persian group 1 on key press; observed groups: {press_groups:?}");
     assert!(release_groups.contains(&1), "XI2 did not report Persian group 1 on key release; observed groups: {release_groups:?}");
 
