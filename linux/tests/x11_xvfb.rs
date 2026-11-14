@@ -255,7 +255,7 @@ fn x11_session_api_polls_root_propagated_focus_transitions() {
     assert!(layout.success(), "could not set deterministic XKB layout");
 
     let session = X11SessionConnection::connect().expect("connect X11 session API");
-    session.subscribe_focus_events().expect("subscribe to XI2 focus events");
+    session.subscribe_session_events().expect("subscribe to XI2 key and focus events");
 
     let (client, screen) = x11rb::connect(None).expect("connect second X11 client");
     let root = client.setup().roots[screen].root;
