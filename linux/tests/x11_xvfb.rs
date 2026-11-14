@@ -276,13 +276,20 @@ fn x11_session_api_polls_root_propagated_focus_transitions() {
     client.map_window(child).unwrap().check().unwrap();
     client.set_input_focus(InputFocus::PARENT, child, x11rb::CURRENT_TIME).unwrap().check().unwrap();
     client.flush().unwrap();
+    run_xdotool(&["key", "a"]);
 
     let deadline = Instant::now() + Duration::from_secs(3);
     let mut observed_focus = false;
-    while Instant::now() < deadline && !observed_focus {
+    let mut observed_key_press = false;
+    while Instant::now() < deadline && !(observed_focus && observed_key_press) {
         if let Some(event) = session.poll_for_session_event().expect("poll session events") {
-            if let X11SessionEvent::Focus(focus) = event {
-                observed_focus = focus.event_window == root;
+            match event {
+                X11SessionEvent::Focus(focus) => {
+                    observed_focus |= focus.event_window == root;
+                }
+                X11SessionEvent::Key(key) => {
+                    observed_key_press |= key.pressed && key.keycode == 38;
+                }
             }
         } else {
             thread::sleep(Duration::from_millis(10));
@@ -293,4 +300,5 @@ fn x11_session_api_polls_root_propagated_focus_transitions() {
     client.flush().unwrap();
 
     assert!(observed_focus, "session API did not expose a root-propagated XI2 focus event");
+    assert!(observed_key_press, "combined session subscription did not deliver the key press");
 }
