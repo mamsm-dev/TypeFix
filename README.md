@@ -11,7 +11,7 @@ It currently contains the shared detection core, a backend-neutral typing-sessio
 | English/Persian detection core | Implemented with Rust tests |
 | Typing-session state machine | Implemented with lifecycle/reset tests |
 | X11 connection and XI2 capability preflight | Implemented |
-| XKB keymap compilation and layout groups | Implemented; server-side custom keymap parity still needs validation |
+| XKB keymap compilation, layout groups, and map-change refresh | Implemented; refresh is explicit after XKB notifications; server-side custom keymap parity still needs validation |
 | Opt-in XI2 raw key observer | Implemented; keycodes and metadata only |
 | Opt-in XI2 device-event observer | Implemented; effective modifier/group snapshots verified under Xvfb; real desktop validation pending |
 | XKB key-event text translation and Compose/dead keys | Implemented as an explicit in-memory primitive; not wired into the live session |
