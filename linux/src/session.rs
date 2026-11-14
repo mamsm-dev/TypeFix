@@ -388,6 +388,37 @@ mod tests {
     }
 
     #[test]
+    fn offers_persian_to_english_suggestion_and_tab_applies_it() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("typefix-persian-session-{nonce}"));
+        fs::create_dir_all(&root).unwrap();
+        // The intended English word ranks ahead of the mistyped Persian word.
+        fs::write(root.join("en"), "want\\nhello\\nworld\\n").unwrap();
+        fs::write(root.join("fa"), "دنیا\\nسلام\\n").unwrap();
+        let dicts = Dictionaries::load(root.join("en"), root.join("fa")).unwrap();
+
+        // Synthetic inverse physical-key map: Persian input "سلام" maps to "want".
+        let mut map = LayoutMap::default();
+        for (from, to) in [('س', "w"), ('ل', "a"), ('ا', "n"), ('م', "t")] {
+            map.insert(from, to);
+        }
+
+        let mut session = TypingSession::new();
+        for ch in "سلام".chars() {
+            session.handle(SessionEvent::Text(ch.to_string()), &dicts, Language::Persian, &map);
+        }
+        assert!(matches!(
+            session.handle(SessionEvent::Space, &dicts, Language::Persian, &map),
+            SessionAction::Suggestion(Suggestion { ref original, ref converted, source: Language::Persian })
+                if original == "سلام" && converted == "want"
+        ));
+        assert_eq!(
+            session.handle(SessionEvent::Tab, &dicts, Language::Persian, &map),
+            SessionAction::Apply { text: "want ".into(), delete_chars: 5 }
+        );
+    }
+
+    #[test]
     fn focus_change_clears_buffer_and_suggestion() {
         let (dicts, map) = fixture();
         let mut session = TypingSession::new();
