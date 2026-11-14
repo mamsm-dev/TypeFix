@@ -316,20 +316,20 @@ impl X11SessionConnection {
             .map_err(|e| format!("could not flush XI2 focus event selection: {e}"))
     }
 
-    /// Waits for the next subscribed key or focus event.
+    /// Polls one event from the opt-in X11 session stream without blocking.
     ///
-    /// Use one event loop with this method after enabling the corresponding
-    /// subscriptions; separate blocking wait methods on the same connection
-    /// would consume and discard each other's event types.
-    pub fn wait_for_session_event(&self) -> Result<X11SessionEvent, String> {
+    /// Returns `None` when no subscribed key/focus event is currently queued.
+    pub fn poll_for_session_event(&self) -> Result<Option<X11SessionEvent>, String> {
         loop {
-            let event = self.connection.wait_for_event()
-                .map_err(|e| format!("X11 event wait failed: {e}"))?;
-            match event {
+            let Some(event) = self.connection.poll_for_event()
+                .map_err(|e| format!("X11 event poll failed: {e}"))? else {
+                return Ok(None);
+            };
+            let decoded = match event {
                 Event::XinputKeyPress(event) => {
                     let keycode = u8::try_from(event.detail)
                         .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
-                    return Ok(X11SessionEvent::Key(X11KeyEvent {
+                    Some(X11SessionEvent::Key(X11KeyEvent {
                         keycode,
                         device_id: event.deviceid,
                         source_id: event.sourceid,
@@ -337,12 +337,12 @@ impl X11SessionConnection {
                         pressed: true,
                         effective_modifiers: event.mods.effective,
                         effective_group: event.group.effective,
-                    }));
+                    }))
                 }
                 Event::XinputKeyRelease(event) => {
                     let keycode = u8::try_from(event.detail)
                         .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
-                    return Ok(X11SessionEvent::Key(X11KeyEvent {
+                    Some(X11SessionEvent::Key(X11KeyEvent {
                         keycode,
                         device_id: event.deviceid,
                         source_id: event.sourceid,
@@ -350,30 +350,43 @@ impl X11SessionConnection {
                         pressed: false,
                         effective_modifiers: event.mods.effective,
                         effective_group: event.group.effective,
-                    }));
+                    }))
                 }
-                Event::XinputFocusIn(event) => {
-                    return Ok(X11SessionEvent::Focus(X11FocusEvent {
-                        device_id: event.deviceid,
-                        source_id: event.sourceid,
-                        timestamp: event.time,
-                        focused: true,
-                        event_window: event.event,
-                        child_window: event.child,
-                    }));
-                }
-                Event::XinputFocusOut(event) => {
-                    return Ok(X11SessionEvent::Focus(X11FocusEvent {
-                        device_id: event.deviceid,
-                        source_id: event.sourceid,
-                        timestamp: event.time,
-                        focused: false,
-                        event_window: event.event,
-                        child_window: event.child,
-                    }));
-                }
-                _ => continue,
+                Event::XinputFocusIn(event) => Some(X11SessionEvent::Focus(X11FocusEvent {
+                    device_id: event.deviceid,
+                    source_id: event.sourceid,
+                    timestamp: event.time,
+                    focused: true,
+                    event_window: event.event,
+                    child_window: event.child,
+                })),
+                Event::XinputFocusOut(event) => Some(X11SessionEvent::Focus(X11FocusEvent {
+                    device_id: event.deviceid,
+                    source_id: event.sourceid,
+                    timestamp: event.time,
+                    focused: false,
+                    event_window: event.event,
+                    child_window: event.child,
+                })),
+                _ => None,
+            };
+            if decoded.is_some() {
+                return Ok(decoded);
             }
+        }
+    }
+
+    /// Waits for the next subscribed key or focus event.
+    ///
+    /// Use one event loop with this method after enabling the corresponding
+    /// subscriptions; separate blocking wait methods on the same connection
+    /// would consume and discard each other's event types.
+    pub fn wait_for_session_event(&self) -> Result<X11SessionEvent, String> {
+        loop {
+            if let Some(event) = self.poll_for_session_event()? {
+                return Ok(event);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
         }
     }
 
