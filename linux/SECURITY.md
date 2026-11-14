@@ -1,22 +1,23 @@
 # Linux input privacy model
 
-TypeFix needs access to text as it is entered to recognize a wrong keyboard layout. The Linux implementation deliberately uses different mechanisms on X11 and Wayland.
+TypeFix needs access to committed text during typing to recognize likely keyboard-layout mistakes. The Linux implementation uses different integration models for X11 and the planned Wayland backend.
 
 ## X11
 
-The X11 connection and keymap probe do not subscribe to key events. Two separate XI2 methods provide explicit opt-in:
+X11 event observation is explicit opt-in and runs in the foreground. The session loop subscribes to XI2 key/focus events and XKB map notifications, translates key presses in memory, and sends session actions to a caller-provided callback.
 
-- Raw key events expose keycodes and metadata only; they do not contain effective XKB modifiers/group.
-- Focus-propagated device key events include the server-supplied effective modifier/group snapshot at event time.
+This is not isolated to one application: events may be visible across applications on the same X server. X11 does not provide reliable password-field detection or strong per-application isolation. Users who require strict isolation should not enable the X11 session loop.
 
-Neither subscription is enabled by the probe or silently at startup. Neither grabs or consumes application input. The observer returns key metadata only; this layer does not decode text, inject text, or write typed content to logs.
-
-XI2 observation is server-wide, not strongly isolated to the focused application. X11 does not provide strong per-application input isolation or reliable password-field detection. Any future text buffer must remain in memory only, avoid logs/persistence/network transmission, and clear on focus changes, navigation, shortcuts, cancellation, and pause/quit. Users who require strict isolation should disable X11 event observation.
+The current implementation does not inject or replace text, create a daemon, install a privileged service, or access raw input devices. Typed content used by the session core is transient in-memory state; it must not be logged, persisted, or transmitted. Session and Compose state must be cleared on focus changes, navigation, shortcuts, cancellation, disable, and keymap changes.
 
 ## Wayland
 
-The Wayland implementation is based on an input method (IBus/Fcitx5), not raw device monitoring. Input methods receive text as part of text entry and may be bypassed by applications or toolkit configurations. This is a compatibility trade-off, not a universal guarantee that every sensitive field is automatically recognized.
+The planned Wayland implementation is an input-method integration (IBus first, Fcitx5 later), not raw device monitoring. Input methods receive text as part of text entry, but applications may bypass or incompletely support the input-method path. Secure-input behavior must follow the capabilities exposed by the active input method; unsupported contexts must fail closed rather than claim universal password detection.
 
 ## Explicit non-goals
 
-The project will not install a privileged daemon that reads /dev/input, will not silently enable uinput injection, and will not promise reliable password-field detection across arbitrary apps.
+- No privileged daemon reading `/dev/input`.
+- No silent global keyboard capture.
+- No uinput-based injection.
+- No claim of reliable password-field detection across arbitrary applications.
+- No persistent typing history, telemetry, or network transmission of typed content.
