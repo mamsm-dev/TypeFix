@@ -597,6 +597,8 @@ fn x11_xvfb_session_loop_preserves_repeated_key_presses() {
         // reach the session; release events are ignored for text purposes.
         run_xdotool(&["type", "--clearmodifiers", "--delay", "1", "ssghl"]);
         run_xdotool(&["key", "space"]);
+        // Let the foreground loop drain the final key events before stopping.
+        thread::sleep(Duration::from_millis(150));
         producer_done_thread.store(true, std::sync::atomic::Ordering::Release);
     });
 
