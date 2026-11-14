@@ -4,7 +4,9 @@
 //! events contain keycodes, not the active modifier/group snapshot. No text is
 //! decoded, logged, persisted, or injected by this module.
 
-use std::process::Command;
+use std::{ffi::OsStr, process::Command};
+
+use crate::compose::{ComposeOutcome, ComposeProcessor};
 use x11rb::{
     connection::Connection,
     protocol::{
@@ -93,6 +95,41 @@ pub struct XkbKeymap {
 }
 
 impl XkbKeymap {
+    /// Translate one XI2 device key event through XKB and Compose.
+    ///
+    /// The caller must invoke this only for key presses, pass the server's
+    /// effective modifier/group snapshot, and reset Compose on focus changes,
+    /// navigation, cancellation, disable, and keymap/locale replacement.
+    /// This helper does not subscribe to events or retain text between calls.
+    pub fn translate_event(
+        &self,
+        event: &X11KeyEvent,
+        compose: &mut ComposeProcessor,
+    ) -> X11TextOutcome {
+        if !event.pressed {
+            return X11TextOutcome::NoText;
+        }
+
+        let mut state = xkb::State::new(&self.keymap);
+        state.update_mask(event.effective_modifiers, 0, 0, u32::from(event.effective_group), 0, 0);
+        let keycode = xkb::Keycode::new(u32::from(event.keycode));
+        let keysym = state.key_get_one_sym(keycode);
+
+        match compose.feed(keysym) {
+            ComposeOutcome::Composing => X11TextOutcome::Composing,
+            ComposeOutcome::Committed(text) => X11TextOutcome::Text(text),
+            ComposeOutcome::Cancelled => X11TextOutcome::Cancelled,
+            ComposeOutcome::Passthrough => {
+                let text = state.key_get_utf8(keycode);
+                if text.is_empty() || text.chars().any(char::is_control) {
+                    X11TextOutcome::NoText
+                } else {
+                    X11TextOutcome::Text(text)
+                }
+            }
+        }
+    }
+
     /// Translate an X11 keycode using the requested XKB layout group and
     /// modifier mask. X11 keycodes are already in the XKB keycode namespace;
     /// do not add the evdev +8 offset a second time.
@@ -116,6 +153,16 @@ impl XkbKeymap {
     pub fn layout_count(&self) -> u32 {
         self.keymap.num_layouts()
     }
+}
+
+/// Result of translating one XI2 device key event. Text exists only in this
+/// return value; callers must keep it in memory and must never log or persist it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum X11TextOutcome {
+    NoText,
+    Composing,
+    Text(String),
+    Cancelled,
 }
 
 /// A key transition observed from XI2. It intentionally contains no decoded text.
