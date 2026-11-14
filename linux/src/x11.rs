@@ -316,6 +316,34 @@ impl X11SessionConnection {
             .map_err(|e| format!("could not flush XI2 focus event selection: {e}"))
     }
 
+    /// Selects key press/release and focus-in/out events in one XI2 request.
+    ///
+    /// Use this when consuming `poll_for_session_event()` or
+    /// `wait_for_session_event()`. XI2 event selections are per device/window;
+    /// issuing separate key-only and focus-only selections can replace the
+    /// previous mask, so this combined method is the safe option for a session.
+    pub fn subscribe_session_events(&self) -> Result<(), String> {
+        let root = self.connection.setup().roots[self.screen_number].root;
+        let mask = XIEventMask::KEY_PRESS
+            | XIEventMask::KEY_RELEASE
+            | XIEventMask::FOCUS_IN
+            | XIEventMask::FOCUS_OUT;
+        self.connection
+            .xinput_xi_select_events(
+                root,
+                &[EventMask {
+                    deviceid: 1, // XIAllMasterDevices
+                    mask: vec![mask],
+                }],
+            )
+            .map_err(|e| format!("could not select XI2 session events: {e}"))?
+            .check()
+            .map_err(|e| format!("X server rejected XI2 session event selection: {e}"))?;
+        self.connection
+            .flush()
+            .map_err(|e| format!("could not flush XI2 session event selection: {e}"))
+    }
+
     /// Polls one event from the opt-in X11 session stream without blocking.
     ///
     /// Returns `None` when no subscribed key/focus event is currently queued.
