@@ -15,7 +15,7 @@ The X11 connection provides two explicitly enabled XI2 observation paths:
 - `subscribe_raw_key_events()` / `wait_for_raw_key_event()`: raw keycode and event metadata only. Raw events do not contain the effective modifier/group snapshot.
 - `subscribe_key_events()` / `wait_for_key_event()`: focus-propagated device key events containing the server-supplied effective modifier mask and active group at event time, along with master/source device IDs and timestamp.
 
-Neither path is enabled by the probe or automatically at startup. Neither grabs or consumes application input. The enriched device-event path is the candidate for future key translation; the raw path remains diagnostic only. Both are visible across applications on the same X server and therefore require explicit user opt-in.
+Neither path is enabled by the probe or automatically at startup. Neither grabs or consumes application input. The enriched device-event path is the candidate for future key translation; the raw path remains diagnostic only. Both are visible across applications on the same X server and therefore require explicit user opt-in. The `typefix-x11-events` foreground diagnostic uses the enriched path and prints key metadata only; run it only during an intentional desktop smoke test and stop it with Ctrl+C.
 
 ## Adapter contract
 
