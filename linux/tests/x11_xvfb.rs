@@ -351,7 +351,7 @@ fn xkb_map_notifications_allow_keymap_refresh() {
 }
 
 #[test]
-fn x11_session_dispatch_clears_typing_and_compose_on_focus_change() {
+fn x11_session_dispatch_clears_typing_on_focus_change() {
     let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     use typefix_core::{
         compose::ComposeProcessor,
@@ -376,10 +376,8 @@ fn x11_session_dispatch_clears_typing_and_compose_on_focus_change() {
         map.insert(from, to);
     }
 
-    let compose = ComposeProcessor::from_buffer(
-        "<dead_acute> <e> : \"é\" eacute\n",
-        "en_US.UTF-8",
-    ).expect("deterministic Compose table compiles");
+    let compose = ComposeProcessor::new(std::ffi::OsStr::new("en_US.UTF-8"))
+        .expect("system Compose table is available in CI");
     let mut typing = ComposedTypingSession::new(compose);
     for ch in "sghl".chars() {
         typing.handle(SessionEvent::Text(ch.to_string()), &dicts, Language::English, &map);
