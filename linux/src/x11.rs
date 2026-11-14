@@ -716,6 +716,43 @@ mod tests {
     }
 
     #[test]
+    fn repeated_key_presses_are_preserved_as_repeated_text() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into()],
+            variants: vec!["".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US XKB keymap compiles");
+        let mut compose = ComposeProcessor::from_buffer("", "en_US.UTF-8")
+            .expect("empty deterministic Compose table compiles");
+        let press = X11KeyEvent {
+            keycode: 38,
+            device_id: 2,
+            source_id: 2,
+            timestamp: 10,
+            pressed: true,
+            effective_modifiers: 0,
+            effective_group: 0,
+        };
+
+        // XI2 reports each key-repeat as another press transition. The
+        // translator must preserve it as text rather than deduplicate it.
+        assert_eq!(
+            keymap.session_event_for_key(&press, &mut compose),
+            Some(crate::session::SessionEvent::Text("a".into()))
+        );
+        let repeated = X11KeyEvent { timestamp: 45, ..press };
+        assert_eq!(
+            keymap.session_event_for_key(&repeated, &mut compose),
+            Some(crate::session::SessionEvent::Text("a".into()))
+        );
+        let release = X11KeyEvent { pressed: false, ..repeated };
+        assert_eq!(keymap.session_event_for_key(&release, &mut compose), None);
+    }
+
+    #[test]
     fn classifies_special_and_shortcut_keys_for_typing_session() {
         let config = XkbConfig {
             rules: "evdev".into(),
