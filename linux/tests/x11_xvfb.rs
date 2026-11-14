@@ -62,11 +62,13 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     let mut saw_shifted_a_press = false;
     let mut saw_a_release = false;
     let mut source_keyboard_id = None;
+    let mut master_keyboard_id = None;
     while Instant::now() < deadline && !(saw_shifted_a_press && saw_a_release) {
         if let Some(event) = connection.poll_for_event().unwrap() {
             match event {
                 Event::XinputKeyPress(e) if e.detail == 38 => {
                     source_keyboard_id = Some(e.sourceid);
+                    master_keyboard_id = Some(e.deviceid);
                     saw_shifted_a_press |= e.mods.effective & 1 != 0 && e.group.effective == 0;
                 }
                 Event::XinputKeyRelease(e) if e.detail == 38 => {
@@ -82,22 +84,25 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     assert!(saw_a_release, "XI2 did not deliver A release with group 0");
 
     let source_keyboard_id = source_keyboard_id.expect("XI2 key event exposed source keyboard ID");
+    let master_keyboard_id = master_keyboard_id.expect("XI2 key event exposed master keyboard ID");
+    assert_ne!(source_keyboard_id, master_keyboard_id, "XI2 source and master devices should be distinct in this test");
     let display = std::env::var("DISPLAY").expect("Xvfb DISPLAY is set");
     let mut loader = Command::new("xkbcomp")
-        .args(["-w", "0", "-i", &source_keyboard_id.to_string(), "-", &display])
+        .args(["-w", "0", "-i", &master_keyboard_id.to_string(), "-", &display])
         .stdin(Stdio::piped())
         .spawn()
         .expect("xkbcomp installed");
     loader.stdin.take().expect("xkbcomp stdin").write_all(&map.stdout).unwrap();
     let loaded = loader.wait().expect("wait for xkbcomp");
-    assert!(loaded.success(), "xkbcomp could not load the two-group map on XI2 source keyboard");
+    assert!(loaded.success(), "xkbcomp could not load the two-group map on XI2 master keyboard");
 
-    // Lock the same source keyboard into group 1 through the XKB protocol.
-    // This is deterministic test setup, not a production layout-switch feature.
-    let state_before = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
-    eprintln!("XKB group before lock on XI2 source device {}: {:?}", source_keyboard_id, state_before.group);
+    // XI2 reports effective group state for the master keyboard (deviceid),
+    // while sourceid identifies the physical/virtual slave that generated input.
+    // Configure and lock the master device whose group snapshot is in XI2 events.
+    let state_before = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
+    eprintln!("XKB group before lock on XI2 master device {} (source {}): {:?}", master_keyboard_id, source_keyboard_id, state_before.group);
     connection.xkb_latch_lock_state(
-        u16::from(source_keyboard_id),
+        u16::from(master_keyboard_id),
         x11rb::protocol::xproto::ModMask::from(0u16),
         x11rb::protocol::xproto::ModMask::from(0u16),
         true,
@@ -107,7 +112,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
         0u16,
     ).unwrap().check().unwrap();
     connection.flush().unwrap();
-    let state_after = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
+    let state_after = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
     eprintln!("XKB group after lock on XI2 source device {}: {:?}", source_keyboard_id, state_after.group);
     assert_eq!(state_after.group, Group::from(1), "XKB source keyboard did not lock to group 1");
 
@@ -149,8 +154,8 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
             thread::sleep(Duration::from_millis(10));
         }
     }
-    let final_state = connection.xkb_get_state(u16::from(source_keyboard_id)).unwrap().reply().unwrap();
-    eprintln!("XKB group after synthetic key on XI2 source device {}: {:?}", source_keyboard_id, final_state.group);
+    let final_state = connection.xkb_get_state(u16::from(master_keyboard_id)).unwrap().reply().unwrap();
+    eprintln!("XKB group after synthetic key on XI2 master device {}: {:?}", master_keyboard_id, final_state.group);
     assert_eq!(final_state.group, Group::from(1), "synthetic input unexpectedly changed the source keyboard group");
     assert!(press_groups.contains(&1), "XI2 did not report Persian group 1 on key press; observed groups: {press_groups:?}");
     assert!(release_groups.contains(&1), "XI2 did not report Persian group 1 on key release; observed groups: {release_groups:?}");
