@@ -235,3 +235,54 @@ fn xvfb_xi2_focus_selection_on_root_observes_child_focus_transitions() {
         "selecting XI2 FocusIn/FocusOut on root did not report a child focus transition; observed: {observed:?}"
     );
 }
+
+#[test]
+fn x11_session_api_polls_root_propagated_focus_transitions() {
+    use typefix_core::x11::{X11SessionConnection, X11SessionEvent};
+
+    let layout = Command::new("setxkbmap")
+        .args(["-layout", "us,ir"])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(layout.success(), "could not set deterministic XKB layout");
+
+    let session = X11SessionConnection::connect().expect("connect X11 session API");
+    session.subscribe_focus_events().expect("subscribe to XI2 focus events");
+
+    let (client, screen) = x11rb::connect(None).expect("connect second X11 client");
+    let root = client.setup().roots[screen].root;
+    let child = client.generate_id().unwrap();
+    client.create_window(
+        0,
+        child,
+        root,
+        0,
+        0,
+        100,
+        60,
+        0,
+        WindowClass::INPUT_OUTPUT,
+        0,
+        &CreateWindowAux::new(),
+    ).unwrap().check().unwrap();
+    client.map_window(child).unwrap().check().unwrap();
+    client.set_input_focus(InputFocus::PARENT, child, x11rb::CURRENT_TIME).unwrap().check().unwrap();
+    client.flush().unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut observed_focus = false;
+    while Instant::now() < deadline && !observed_focus {
+        if let Some(event) = session.poll_for_session_event().expect("poll session events") {
+            if let X11SessionEvent::Focus(focus) = event {
+                observed_focus = focus.event_window == root;
+            }
+        } else {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    client.destroy_window(child).unwrap().check().unwrap();
+    client.flush().unwrap();
+
+    assert!(observed_focus, "session API did not expose a root-propagated XI2 focus event");
+}
