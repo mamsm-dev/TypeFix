@@ -17,12 +17,23 @@ The X11 connection provides two explicitly enabled XI2 observation paths:
 
 Neither path is enabled by the probe or automatically at startup. Neither grabs or consumes application input. The enriched device-event path is the candidate for future key translation; the raw path remains diagnostic only. Both are visible across applications on the same X server and therefore require explicit user opt-in. The `typefix-x11-events` foreground diagnostic uses the enriched path and prints key metadata only; run it only during an intentional desktop smoke test and stop it with Ctrl+C.
 
+## Compose/dead-key state
+
+The `compose` module wraps `libxkbcommon`'s locale-specific Compose state machine:
+
+- A key symbol is fed to Compose before ordinary key-to-text translation.
+- Incomplete sequences produce no text; completed sequences return one committed UTF-8 string.
+- Cancelled sequences are discarded, and callers can explicitly reset pending composition.
+- The adapter must reset Compose state on focus changes, navigation, cancellation, disable, and keymap/locale replacement.
+
+The Compose processor is currently an isolated, in-memory component. It does not subscribe to events, decode or retain a typed history, log text, or inject text. Its tests use a tiny deterministic Compose table, so they do not depend on the host's locale files.
+
 ## Adapter contract
 
 A complete desktop adapter must:
 
 1. Use the per-event modifier/group snapshot from XI2 device events with the active keymap; do not infer layout from raw keycodes.
-2. Handle key repeat, compose/dead-key output, and keymap changes before forwarding committed printable text to `TypingSession`.
+2. Handle key repeat, Compose/dead-key output, and keymap changes before forwarding committed printable text to `TypingSession`.
 3. Forward focus changes, navigation, pointer clicks, shortcuts, and cancellation as reset events.
 4. Keep typed text only in memory; do not log, persist, or transmit it.
 5. Show suggestions only in supported contexts and fail closed when a secure-input state is exposed.
@@ -31,6 +42,6 @@ A complete desktop adapter must:
 
 ## Current boundary
 
-The X11 layer now has an opt-in XI2 device-event path that receives modifier/group snapshots from the server. The isolated Xvfb integration test verifies delivery of key press/release events and checks the effective Shift modifier and group 0 snapshot. It does not validate every keyboard layout or a real desktop compositor/session. The implementation still does not decode text, process compose/dead-key sequences, detect focus changes reliably, display a tray icon or popup, or replace text. The XKB compiler rebuilds from RMLVO configuration returned by `setxkbmap -query`; custom server-side keymap modifications may not be represented exactly.
+The X11 layer now has an opt-in XI2 device-event path that receives modifier/group snapshots from the server. The isolated Xvfb integration test verifies delivery of key press/release events and checks the effective Shift modifier and group 0 snapshot. It does not validate every keyboard layout or a real desktop compositor/session. The implementation still does not decode text, detect focus changes reliably, display a tray icon or popup, or replace text. The XKB compiler rebuilds from RMLVO configuration returned by `setxkbmap -query`; custom server-side keymap modifications may not be represented exactly.
 
 X11 clients with access to the same X server do not have strong per-application input isolation. Reliable password-field detection must not be claimed. Users who require stronger isolation should disable X11 event observation; Wayland remains planned through IBus input-method integration.
