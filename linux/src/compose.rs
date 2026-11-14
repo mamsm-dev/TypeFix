@@ -21,9 +21,9 @@ pub enum ComposeOutcome {
 }
 
 pub struct ComposeProcessor {
-    // Keep the context alive for at least as long as the compose state.
-    _context: xkb::Context,
+    // Rust drops fields in declaration order: drop the state before its context.
     state: xkb::compose::State,
+    _context: xkb::Context,
 }
 
 impl ComposeProcessor {
