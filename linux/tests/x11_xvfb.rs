@@ -180,7 +180,7 @@ fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
 
 #[test]
 fn xvfb_xi2_focus_selection_on_root_observes_child_focus_transitions() {
-    let _guard = X11_TEST_LOCK.lock().unwrap();
+    let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let (connection, screen) = x11rb::connect(None).expect("connect to Xvfb");
     let version = connection.xinput_xi_query_version(2, 0).unwrap().reply().unwrap();
     assert!(version.major_version >= 2, "XInput2 2.0 is required");
@@ -245,7 +245,7 @@ fn xvfb_xi2_focus_selection_on_root_observes_child_focus_transitions() {
 
 #[test]
 fn x11_session_api_polls_root_propagated_focus_transitions() {
-    let _guard = X11_TEST_LOCK.lock().unwrap();
+    let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     use typefix_core::x11::{X11SessionConnection, X11SessionEvent};
 
     let layout = Command::new("setxkbmap")
@@ -312,4 +312,40 @@ fn x11_session_api_polls_root_propagated_focus_transitions() {
 
     assert!(observed_focus, "session API did not expose a root-propagated XI2 focus event");
     assert!(observed_key_press, "combined session subscription did not deliver the root-focused key press");
+}
+
+#[test]
+fn xkb_map_notifications_allow_keymap_refresh() {
+    let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    use typefix_core::x11::{X11SessionConnection, X11SessionEvent};
+
+    let initial = Command::new("setxkbmap")
+        .args(["-layout", "us"])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(initial.success(), "could not set initial US keymap");
+
+    let mut session = X11SessionConnection::connect().expect("connect X11 session API");
+    assert_eq!(session.keymap.layout_count(), 1);
+    session.subscribe_xkb_map_events().expect("subscribe to XKB map changes");
+
+    let changed = Command::new("setxkbmap")
+        .args(["-layout", "us,ir"])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(changed.success(), "could not change to US/Persian keymap");
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut observed_map_change = false;
+    while Instant::now() < deadline && !observed_map_change {
+        if let Some(event) = session.poll_for_session_event().expect("poll XKB map event") {
+            observed_map_change = matches!(event, X11SessionEvent::KeymapChanged(_));
+        } else {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    assert!(observed_map_change, "XKB map change notification was not delivered");
+    session.refresh_keymap().expect("refresh compiled XKB keymap");
+    assert_eq!(session.keymap.layout_count(), 2);
 }

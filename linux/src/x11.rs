@@ -14,6 +14,8 @@ use x11rb::{
         xinput::{
             ConnectionExt as XInputConnectionExt, EventMask, XIEventMask,
         },
+        xkb as x11_xkb,
+        xkb::ConnectionExt as XkbConnectionExt,
         Event,
     },
     rust_connection::RustConnection,
@@ -207,6 +209,23 @@ pub struct X11FocusEvent {
 pub enum X11SessionEvent {
     Key(X11KeyEvent),
     Focus(X11FocusEvent),
+    KeymapChanged(X11KeymapChangeEvent),
+}
+
+/// An XKB map or core keyboard replacement notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct X11KeymapChangeEvent {
+    pub device_id: u16,
+    pub timestamp: u32,
+    pub changed_components: u16,
+    pub new_keyboard: bool,
+}
+
+impl X11KeymapChangeEvent {
+    /// A keymap change invalidates both translated key state and pending Compose.
+    pub fn as_session_event(&self) -> crate::session::SessionEvent {
+        crate::session::SessionEvent::Reset
+    }
 }
 
 impl X11FocusEvent {
@@ -352,6 +371,72 @@ impl X11SessionConnection {
             .map_err(|e| format!("could not flush XI2 session event selection: {e}"))
     }
 
+    /// Selects XKB map and core-keyboard replacement notifications.
+    ///
+    /// The caller should refresh the compiled XKB keymap after receiving
+    /// `X11SessionEvent::KeymapChanged`. This subscription is explicit.
+    pub fn subscribe_xkb_map_events(&self) -> Result<(), String> {
+        let version = self.connection
+            .xkb_use_extension(1, 0)
+            .map_err(|e| format!("XKB extension request failed: {e}"))?
+            .reply()
+            .map_err(|e| format!("XKB extension negotiation failed: {e}"))?;
+        if !version.supported {
+            return Err("XKB extension 1.0 or newer is required for map notifications".into());
+        }
+
+        let map_parts = x11_xkb::MapPart::KEY_TYPES
+            | x11_xkb::MapPart::KEY_SYMS
+            | x11_xkb::MapPart::MODIFIER_MAP
+            | x11_xkb::MapPart::EXPLICIT_COMPONENTS
+            | x11_xkb::MapPart::KEY_ACTIONS
+            | x11_xkb::MapPart::KEY_BEHAVIORS
+            | x11_xkb::MapPart::VIRTUAL_MODS
+            | x11_xkb::MapPart::VIRTUAL_MOD_MAP;
+        let details = x11_xkb::SelectEventsAux {
+            new_keyboard_notify: None,
+            state_notify: None,
+            controls_notify: None,
+            indicator_state_notify: None,
+            indicator_map_notify: None,
+            names_notify: None,
+            compat_map_notify: None,
+            bell_notify: None,
+            action_message: None,
+            access_x_notify: None,
+            extension_device_notify: None,
+        };
+        let events = x11_xkb::EventType::MAP_NOTIFY
+            | x11_xkb::EventType::NEW_KEYBOARD_NOTIFY;
+        self.connection
+            .xkb_select_events(
+                x11_xkb::ID::USE_CORE_KBD.into(),
+                x11_xkb::EventType::from(0u16),
+                events,
+                map_parts,
+                map_parts,
+                &details,
+            )
+            .map_err(|e| format!("could not select XKB map notifications: {e}"))?
+            .check()
+            .map_err(|e| format!("X server rejected XKB map notification selection: {e}"))?;
+        self.connection
+            .flush()
+            .map_err(|e| format!("could not flush XKB map notification selection: {e}"))
+    }
+
+    /// Rebuilds the XKB translator from the current session's RMLVO settings.
+    ///
+    /// Call after receiving `X11SessionEvent::KeymapChanged`; pending Compose
+    /// state should also be reset by handling the event's session reset mapping.
+    pub fn refresh_keymap(&mut self) -> Result<(), String> {
+        let config = XkbConfig::from_current_session()?;
+        let keymap = config.compile()?;
+        self.config = config;
+        self.keymap = keymap;
+        Ok(())
+    }
+
     /// Polls one event from the opt-in X11 session stream without blocking.
     ///
     /// Returns `None` when no subscribed key/focus event is currently queued.
@@ -403,6 +488,18 @@ impl X11SessionConnection {
                     focused: false,
                     event_window: event.event,
                     child_window: event.child,
+                })),
+                Event::XkbMapNotify(event) => Some(X11SessionEvent::KeymapChanged(X11KeymapChangeEvent {
+                    device_id: u16::from(event.device_id),
+                    timestamp: event.time,
+                    changed_components: u16::from(event.changed),
+                    new_keyboard: false,
+                })),
+                Event::XkbNewKeyboardNotify(event) => Some(X11SessionEvent::KeymapChanged(X11KeymapChangeEvent {
+                    device_id: u16::from(event.device_id),
+                    timestamp: event.time,
+                    changed_components: u16::from(event.changed),
+                    new_keyboard: true,
                 })),
                 _ => None,
             };
