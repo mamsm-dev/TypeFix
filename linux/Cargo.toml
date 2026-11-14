@@ -19,7 +19,7 @@ path = "src/bin/x11_probe.rs"
 
 [dependencies]
 x11rb = { version = "0.13", features = ["xinput", "xkb"] }
+xkbcommon = "0.9"
 
 [dev-dependencies]
 x11rb = { version = "0.13", features = ["xtest"] }
-xkbcommon = "0.9"
