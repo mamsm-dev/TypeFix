@@ -86,7 +86,7 @@ impl ComposedTypingSession {
         map: &LayoutMap,
     ) -> SessionAction {
         if matches!(
-            event,
+            &event,
             SessionEvent::Reset
                 | SessionEvent::FocusChanged
                 | SessionEvent::Navigation
@@ -311,7 +311,7 @@ mod tests {
 
     fn composed_session() -> ComposedTypingSession {
         let compose = ComposeProcessor::from_buffer(
-            "<dead_acute> <e> : \"é\" eacute\\n",
+            "<dead_acute> <e> : \"é\" eacute\n",
             "en_US.UTF-8",
         )
         .expect("deterministic Compose table compiles");
