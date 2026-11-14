@@ -129,6 +129,7 @@ pub fn suggest(dicts: &Dictionaries, map: &LayoutMap, typed: &str, language: Lan
     })
 }
 
+pub mod compose;
 pub mod session;
 pub mod x11;
 
