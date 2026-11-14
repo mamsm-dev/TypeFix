@@ -319,6 +319,60 @@ mod tests {
     use super::*;
 
     #[test]
+    fn translates_event_text_with_server_modifier_snapshot() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("xkb-data and libxkbcommon installed");
+        let mut compose = ComposeProcessor::from_buffer("", "en_US.UTF-8")
+            .expect("empty deterministic Compose table compiles");
+        let event = X11KeyEvent {
+            keycode: 38,
+            device_id: 2,
+            source_id: 2,
+            timestamp: 1,
+            pressed: true,
+            effective_modifiers: 1,
+            effective_group: 0,
+        };
+        assert_eq!(keymap.translate_event(&event, &mut compose), X11TextOutcome::Text("A".into()));
+
+        let release = X11KeyEvent { pressed: false, ..event };
+        assert_eq!(keymap.translate_event(&release, &mut compose), X11TextOutcome::NoText);
+    }
+
+    #[test]
+    fn translates_dead_key_sequence_before_plain_text() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into()],
+            variants: vec!["intl".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("us intl keymap compiles");
+        let mut compose = ComposeProcessor::from_buffer(
+            "<dead_acute> <e> : \"é\" eacute\\n",
+            "en_US.UTF-8",
+        )
+        .expect("deterministic Compose table compiles");
+
+        // X11 keycode 48 is the apostrophe/dead-acute key in us(intl);
+        // keycode 26 is the physical E key.
+        let dead_acute = X11KeyEvent {
+            keycode: 48, device_id: 2, source_id: 2, timestamp: 1,
+            pressed: true, effective_modifiers: 0, effective_group: 0,
+        };
+        let e = X11KeyEvent { keycode: 26, timestamp: 2, ..dead_acute };
+        assert_eq!(keymap.translate_event(&dead_acute, &mut compose), X11TextOutcome::Composing);
+        assert_eq!(keymap.translate_event(&e, &mut compose), X11TextOutcome::Text("é".into()));
+    }
+
+    #[test]
     fn parses_multiple_layouts_and_options() {
         let config = XkbConfig::from_query_output(
             "rules: evdev\nmodel: pc105\nlayout: us,ir\nvariant: ,\noptions: grp:alt_shift_toggle\n",
