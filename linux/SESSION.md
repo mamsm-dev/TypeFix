@@ -14,7 +14,7 @@ The X11 connection exposes explicit observation APIs:
 - `subscribe_session_events()` with `poll_for_session_event()` or `wait_for_session_event()`: combined key and focus stream. Prefer this combined subscription because XI2 selections are per device/window.
 - `subscribe_xkb_map_events()`: XKB map/new-keyboard notifications. On change, session state is reset and `refresh_keymap()` rebuilds the keymap translator from the current XKB RMLVO settings.
 
-`XkbKeymap::session_event_for_key()` translates a key press using its event-time modifier/group snapshot and maps the result to a session event (text/Compose, Space, Backspace, Tab, navigation, or shortcut). Key releases do not produce text.
+`XkbKeymap::session_event_for_key()` translates a key press using its event-time modifier/group snapshot and maps the result to a session event (text/Compose, Space, Backspace, Tab, navigation, or shortcut). Key releases do not produce text. `XkbKeymap::layout_map(source_group, target_group)` derives a bidirectional physical-key conversion map from the selected XKB groups at both unshifted and Shift levels. It rejects identical/out-of-range groups and omits ambiguous source characters. The caller must explicitly select the intended English/Persian group pair; this helper does not yet infer language roles or switch the session's source language automatically.
 
 `X11SessionConnection::handle_session_event()` dispatches one X11 event into `ComposedTypingSession`. `X11SessionConnection::run_session_loop()` provides the explicit foreground loop: it enables the required subscriptions, dispatches events, and invokes a caller-provided callback for non-empty `SessionAction` values until the caller's stop predicate requests termination.
 
