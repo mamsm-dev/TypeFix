@@ -202,33 +202,61 @@ impl XkbKeymap {
 
     /// Build a character map between two physical XKB layout groups.
     ///
-    /// Only unshifted printable keys with a single source character are
-    /// considered. If multiple physical keys produce the same source
-    /// character, that character is omitted rather than choosing an arbitrary
-    /// target. This keeps punctuation/dead-key ambiguities from silently
-    /// corrupting conversions. The caller must validate that both groups
-    /// correspond to the intended English/Persian pair before using the map.
-    pub fn layout_map(&self, source_group: u32, target_group: u32) -> crate::LayoutMap {
+    /// Unshifted and Shift levels are sampled for each physical key, matching
+    /// the levels used by the Windows layout mapper. A source character is
+    /// omitted if more than one physical key/level produces it; choosing one
+    /// arbitrarily could corrupt conversion. The caller must select the
+    /// intended English/Persian group pair explicitly.
+    ///
+    /// Identical or out-of-range groups are rejected instead of returning an
+    /// empty/identity map that could be mistaken for a valid conversion map.
+    pub fn layout_map(
+        &self,
+        source_group: u32,
+        target_group: u32,
+    ) -> Result<crate::LayoutMap, String> {
+        if source_group >= self.layout_count() {
+            return Err(format!(
+                "source XKB group {source_group} is out of range ({} groups)",
+                self.layout_count()
+            ));
+        }
+        if target_group >= self.layout_count() {
+            return Err(format!(
+                "target XKB group {target_group} is out of range ({} groups)",
+                self.layout_count()
+            ));
+        }
+        if source_group == target_group {
+            return Err("source and target XKB groups must be different".into());
+        }
+
         use std::collections::HashMap;
 
+        // XKB's core Shift modifier is bit zero. Sample the same modifier
+        // state in both groups so uppercase and shifted Persian symbols map
+        // by physical key position too.
+        const MODIFIER_LEVELS: [u32; 2] = [0, 1];
         let mut candidates: HashMap<char, Option<String>> = HashMap::new();
         for keycode in 8..=255 {
-            let Some(source) = self.translate_keycode(keycode, source_group, 0) else {
-                continue;
-            };
-            let mut chars = source.chars();
-            let Some(source_char) = chars.next() else { continue };
-            if chars.next().is_some() {
-                continue;
-            }
-            let Some(target) = self.translate_keycode(keycode, target_group, 0) else {
-                continue;
-            };
+            for modifiers in MODIFIER_LEVELS {
+                let Some(source) = self.translate_keycode(keycode, source_group, modifiers) else {
+                    continue;
+                };
+                let mut chars = source.chars();
+                let Some(source_char) = chars.next() else { continue };
+                if chars.next().is_some() || source_char.is_whitespace() {
+                    continue;
+                }
+                let Some(target) = self.translate_keycode(keycode, target_group, modifiers) else {
+                    continue;
+                };
 
-            candidates
-                .entry(source_char)
-                .and_modify(|candidate| *candidate = None)
-                .or_insert(Some(target));
+                candidates
+                    .entry(source_char)
+                    .and_modify(|candidate| *candidate = None)
+                    .or_insert(Some(target));
+            }
         }
 
         let mut map = crate::LayoutMap::default();
@@ -237,7 +265,7 @@ impl XkbKeymap {
                 map.insert(source, target);
             }
         }
-        map
+        Ok(map)
     }
 
     pub fn layout_count(&self) -> u32 {
@@ -965,7 +993,7 @@ mod tests {
     }
 
     #[test]
-    fn builds_layout_maps_in_both_english_persian_directions() {
+    fn builds_shift_aware_layout_maps_in_both_english_persian_directions() {
         let config = XkbConfig {
             rules: "evdev".into(),
             model: "pc105".into(),
@@ -975,10 +1003,51 @@ mod tests {
         };
         let keymap = config.compile().expect("US/Persian XKB keymap compiles");
 
-        let to_persian = keymap.layout_map(0, 1);
-        let to_english = keymap.layout_map(1, 0);
+        let to_persian = keymap.layout_map(0, 1).expect("US to Persian groups are valid");
+        let to_english = keymap.layout_map(1, 0).expect("Persian to US groups are valid");
         assert_eq!(to_persian.convert("sghl"), "سلام");
         assert_eq!(to_english.convert("سلام"), "sghl");
+
+        // The physical S key on US Shift level maps to the Persian Shift
+        // output, and the reverse map returns the uppercase Latin character.
+        let shifted_persian = keymap
+            .translate_keycode(39, 1, 1)
+            .expect("Persian Shift+S produces printable text");
+        assert_eq!(to_persian.convert("S"), shifted_persian);
+        assert_eq!(to_english.convert(&shifted_persian), "S");
+    }
+
+    #[test]
+    fn rejects_invalid_or_identical_layout_map_groups() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/Persian XKB keymap compiles");
+
+        assert!(keymap.layout_map(0, 2).is_err());
+        assert!(keymap.layout_map(2, 0).is_err());
+        assert!(keymap.layout_map(1, 1).is_err());
+    }
+
+    #[test]
+    fn builds_bidirectional_layout_maps_for_german_qwertz() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "de".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/German XKB keymap compiles");
+
+        let to_german = keymap.layout_map(0, 1).expect("US to German groups are valid");
+        let to_us = keymap.layout_map(1, 0).expect("German to US groups are valid");
+        assert_eq!(to_german.convert("yzYZ"), "zyZY");
+        assert_eq!(to_us.convert("zyZY"), "yzYZ");
     }
 
     #[test]
