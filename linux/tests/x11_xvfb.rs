@@ -633,7 +633,7 @@ fn xvfb_builds_bidirectional_maps_from_current_xkb_layout_groups() {
     use typefix_core::x11::X11SessionConnection;
 
     let persian_layout = Command::new("setxkbmap")
-        .args(["-layout", "us,ir", "-option", ""])
+        .args(["-layout", "us,ir"])
         .status()
         .expect("setxkbmap installed");
     assert!(persian_layout.success(), "could not set US/Persian XKB layout");
@@ -652,7 +652,7 @@ fn xvfb_builds_bidirectional_maps_from_current_xkb_layout_groups() {
     assert_eq!(to_english.convert("سلام"), "sghl");
 
     let german_layout = Command::new("setxkbmap")
-        .args(["-layout", "us,de", "-option", ""])
+        .args(["-layout", "us,de"])
         .status()
         .expect("setxkbmap installed");
     assert!(german_layout.success(), "could not set US/German XKB layout");
