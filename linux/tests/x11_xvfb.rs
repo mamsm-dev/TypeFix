@@ -1,55 +1,40 @@
-use std::{process::Command, thread, time::{Duration, Instant}};
 use x11rb::{
     connection::Connection,
-    protocol::{xinput::{ConnectionExt as XInputConnectionExt, EventMask, XIEventMask}, Event},
+    protocol::xinput::{ConnectionExt as XInputConnectionExt, EventMask, XIEventMask},
 };
 
+/// Xvfb can validate the real XI2 connection and that the server accepts the
+/// root-window device-event selection. It cannot prove event delivery without
+/// generating keyboard input; this test deliberately does not use XTest,
+/// xdotool, or any other input-injection mechanism.
 #[test]
-fn xvfb_delivers_xi2_device_key_events_with_modifier_snapshot() {
+fn xvfb_accepts_xi2_device_key_press_release_selection_on_root() {
     let (connection, screen) = x11rb::connect(None).expect("connect to Xvfb");
-    let version = connection.xinput_xi_query_version(2, 0).unwrap().reply().unwrap();
-    assert!(version.major_version >= 2, "XInput2 2.0 is required");
+    let version = connection
+        .xinput_xi_query_version(2, 0)
+        .expect("send XI2 version request")
+        .reply()
+        .expect("negotiate XI2 version");
+    assert!(
+        version.major_version >= 2,
+        "XInput2 2.0 is required"
+    );
 
     let root = connection.setup().roots[screen].root;
     let mask = XIEventMask::KEY_PRESS | XIEventMask::KEY_RELEASE;
-    connection.xinput_xi_select_events(
-        root,
-        &[EventMask { deviceid: 1, mask: vec![mask] }],
-    ).unwrap().check().unwrap();
-    connection.flush().unwrap();
+    connection
+        .xinput_xi_select_events(
+            root,
+            &[EventMask {
+                deviceid: 1, // XIAllMasterDevices
+                mask: vec![mask],
+            }],
+        )
+        .expect("send XI2 event selection")
+        .check()
+        .expect("X server must accept root key press/release selection");
 
-    // XTest is used only by this isolated CI test to synthesize a deterministic
-    // Shift+A keystroke. The production application does not inject input.
-    thread::sleep(Duration::from_millis(150));
-    for args in [
-        vec!["keydown", "Shift_L"],
-        vec!["keydown", "a"],
-        vec!["keyup", "a"],
-        vec!["keyup", "Shift_L"],
-    ] {
-        let status = Command::new("xdotool").args(args).status().expect("xdotool installed");
-        assert!(status.success(), "xdotool command failed");
-    }
-
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let mut saw_shifted_a_press = false;
-    let mut saw_a_release = false;
-    while Instant::now() < deadline && !(saw_shifted_a_press && saw_a_release) {
-        if let Some(event) = connection.poll_for_event().unwrap() {
-            match event {
-                Event::XinputKeyPress(e) if e.detail == 38 => {
-                    saw_shifted_a_press |= e.mods.effective & 1 != 0 && e.group.effective == 0;
-                }
-                Event::XinputKeyRelease(e) if e.detail == 38 => {
-                    saw_a_release |= e.group.effective == 0;
-                }
-                _ => {}
-            }
-        } else {
-            thread::sleep(Duration::from_millis(10));
-        }
-    }
-
-    assert!(saw_shifted_a_press, "XI2 did not deliver Shift+A press with effective Shift modifier and group 0");
-    assert!(saw_a_release, "XI2 did not deliver A release with group snapshot");
+    // A successful checked request proves the server accepted the selection;
+    // it does not claim that root receives key events from every focus target.
+    connection.flush().expect("flush XI2 selection");
 }
