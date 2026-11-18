@@ -38,7 +38,7 @@ Input-method support depends on the active input method and on applications acce
 
 Implemented: shared English/Persian detection; backend-neutral typing and Compose state; X11/XInput2 event delivery; XKB translation using server-supplied modifier/group snapshots; key classification; focus and keymap-change handling; and a callback-driven foreground session loop.
 
-Not implemented: desktop suggestion popup, tray/menu UI, safe text replacement, Wayland/IBus, Fcitx5, and Linux release packages.
+Not implemented: tray/menu UI, safe text replacement, Wayland/IBus, and Fcitx5. Suggestions are shown as desktop notifications by the foreground `typefix` binary.
 
 See [SESSION.md](SESSION.md) for the event/session contract and [SECURITY.md](SECURITY.md) for the privacy boundary.
 
@@ -48,7 +48,17 @@ The Linux implementation uses the shared English and Persian word-frequency file
 
 ## Release artifacts
 
-Linux packages are not available yet. Add AppImage, Debian, RPM, and Arch packaging only after the desktop application and runtime dependencies are buildable and tested in CI. Do not publish placeholder packages.
+The `typefix` binary (`src/bin/typefix.rs`) is a foreground X11 frontend: it runs the session loop and shows suggestions via `notify-send`. It does not replace text.
+
+Pushing a tag such as `v0.1.0` (must match the version in `Cargo.toml`) runs `.github/workflows/linux-release.yml`, which builds and attaches to the GitHub Release:
+
+- `.AppImage` (x86_64, via linuxdeploy)
+- `.deb` (cargo-deb)
+- `.rpm` (cargo-generate-rpm)
+- Arch `.pkg.tar.zst` (makepkg in an Arch container, from `packaging/arch/PKGBUILD`)
+- `SHA256SUMS`
+
+The release workflow has not been run yet; verify the first tag build before relying on it.
 
 ## Milestones
 

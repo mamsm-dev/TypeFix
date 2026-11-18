@@ -10,6 +10,10 @@ name = "typefix_core"
 path = "src/lib.rs"
 
 [[bin]]
+name = "typefix"
+path = "src/bin/typefix.rs"
+
+[[bin]]
 name = "typefix-check"
 path = "src/main.rs"
 
@@ -27,3 +31,41 @@ xkbcommon = "0.9"
 
 [dev-dependencies]
 x11rb = { version = "0.13", features = ["xtest"] }
+
+[package.metadata.deb]
+name = "typefix"
+maintainer = "mamsm-dev <mamsm-dev@users.noreply.github.com>"
+copyright = "2026, mamsm-dev"
+license-file = ["../LICENSE", "0"]
+section = "utils"
+priority = "optional"
+depends = "$auto, x11-xkb-utils"
+recommends = "libnotify-bin"
+extended-description = "TypeFix detects English text typed with the Persian keyboard layout (and the reverse) on X11 and suggests the converted text as a desktop notification. It runs in the foreground and never stores or replaces typed text."
+assets = [
+    ["target/release/typefix", "usr/bin/", "755"],
+    ["../Resources/en_50k.txt", "usr/share/typefix/", "644"],
+    ["../Resources/fa_50k.txt", "usr/share/typefix/", "644"],
+    ["packaging/typefix.desktop", "usr/share/applications/", "644"],
+    ["../icon/icon_1024.png", "usr/share/icons/hicolor/1024x1024/apps/typefix.png", "644"],
+    ["README.md", "usr/share/doc/typefix/README.md", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "typefix"
+summary = "Keyboard layout mistake detector for English and Persian (X11)"
+license = "MIT"
+url = "https://github.com/mamsm-dev/TypeFix"
+auto-req = "disabled"
+assets = [
+    { source = "target/release/typefix", dest = "/usr/bin/typefix", mode = "755" },
+    { source = "../Resources/en_50k.txt", dest = "/usr/share/typefix/en_50k.txt", mode = "644" },
+    { source = "../Resources/fa_50k.txt", dest = "/usr/share/typefix/fa_50k.txt", mode = "644" },
+    { source = "packaging/typefix.desktop", dest = "/usr/share/applications/typefix.desktop", mode = "644" },
+    { source = "../icon/icon_1024.png", dest = "/usr/share/icons/hicolor/1024x1024/apps/typefix.png", mode = "644" },
+    { source = "../LICENSE", dest = "/usr/share/licenses/typefix/LICENSE", mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+libxkbcommon = "*"
+setxkbmap = "*"

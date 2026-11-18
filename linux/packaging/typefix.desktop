@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=TypeFix
+GenericName=Keyboard layout fixer
+Comment=Detects English/Persian keyboard layout mistakes on X11
+Exec=typefix
+Icon=typefix
+Terminal=true
+Categories=Utility;
+Keywords=keyboard;layout;persian;farsi;

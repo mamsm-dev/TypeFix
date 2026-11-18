@@ -1,0 +1,142 @@
+name: Linux release
+
+# Builds .deb, .rpm, Arch (.pkg.tar.zst) and .AppImage packages and attaches
+# them to the GitHub Release for the pushed tag, e.g. `git tag v0.1.0 && git push origin v0.1.0`.
+# The tag must match the version in linux/Cargo.toml.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  deb-rpm-appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check tag matches Cargo.toml version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(grep -m1 '^version' linux/Cargo.toml | cut -d'"' -f2)
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match linux/Cargo.toml version ${version}" >&2
+            exit 1
+          fi
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libxkbcommon-dev libx11-dev libxi-dev imagemagick file
+
+      - name: Install packaging tools
+        run: cargo install cargo-deb cargo-generate-rpm --locked
+
+      - name: Build release binary
+        working-directory: linux
+        run: cargo build --release --bin typefix
+
+      - name: Build .deb
+        working-directory: linux
+        run: cargo deb --no-build
+
+      - name: Build .rpm
+        working-directory: linux
+        run: cargo generate-rpm
+
+      - name: Build AppImage
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 '^version' linux/Cargo.toml | cut -d'"' -f2)
+          mkdir -p appimage-build/AppDir/usr/bin appimage-build/AppDir/usr/share/typefix
+          install -m755 linux/target/release/typefix appimage-build/AppDir/usr/bin/typefix
+          install -m644 Resources/en_50k.txt Resources/fa_50k.txt appimage-build/AppDir/usr/share/typefix/
+          convert icon/icon_1024.png -resize 256x256 appimage-build/typefix.png
+          cd appimage-build
+          curl -fsSL -o linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o linuxdeploy-plugin-appimage https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage
+          chmod +x linuxdeploy linuxdeploy-plugin-appimage
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export LDAI_OUTPUT="typefix-${version}-x86_64.AppImage"
+          ./linuxdeploy --appdir AppDir \
+            --executable AppDir/usr/bin/typefix \
+            --desktop-file ../linux/packaging/typefix.desktop \
+            --icon-file typefix.png \
+            --output appimage
+
+      - name: Collect packages
+        run: |
+          mkdir -p dist
+          cp linux/target/debian/*.deb dist/
+          cp linux/target/generate-rpm/*.rpm dist/
+          cp appimage-build/*.AppImage dist/
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-deb-rpm-appimage
+          path: dist/*
+          if-no-files-found: error
+
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install tooling
+        run: pacman -Syu --noconfirm git sudo cargo libxkbcommon
+
+      - uses: actions/checkout@v4
+
+      - name: Build Arch package
+        run: |
+          set -euo pipefail
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          version=$(grep -m1 '^version' linux/Cargo.toml | cut -d'"' -f2)
+          install -d -o builder /home/builder/pkg
+          cp linux/packaging/arch/PKGBUILD /home/builder/pkg/PKGBUILD
+          chown builder /home/builder/pkg/PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=${version}/" /home/builder/pkg/PKGBUILD
+          cd /home/builder/pkg
+          su builder -c "makepkg -s --noconfirm"
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+          cp /home/builder/pkg/*.pkg.tar.zst "${GITHUB_WORKSPACE}/dist/"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-arch
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [deb-rpm-appimage, arch]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: packages-*
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
