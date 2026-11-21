@@ -55,13 +55,15 @@ jobs:
           if-no-files-found: error
       - name: Publish screenshots to the ui-previews branch
         if: github.ref != 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          cp -r shots /tmp/shots
+          rm -rf /tmp/pub && mkdir /tmp/pub && cp shots/* /tmp/pub/
+          cd /tmp/pub
+          git init -q -b ui-previews
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git checkout --orphan ui-previews
-          git rm -rf --quiet . || true
-          cp /tmp/shots/* .
           git add -A
           git commit -q -m "UI screenshots for ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push -f origin ui-previews
