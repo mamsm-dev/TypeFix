@@ -158,6 +158,7 @@ window.tf-window {{ background-color: {bg}; }}
 .tf-window switch slider {{ background-image: none; background-color: #FFFFFF; border: 1px solid {border}; }}
 .tf-window combobox button {{ background-image: none; background-color: {keycap}; border: 1px solid {border}; border-radius: 9px; box-shadow: none; }}
 .tf-window combobox button:hover {{ border-color: {ACCENT}; }}
+.tf-window combobox button cellview, .tf-window combobox button label {{ color: {fg}; text-shadow: none; }}
 "#
     )
 }

@@ -55,10 +55,18 @@ recommends = "libnotify-bin"
 extended-description = "TypeFix detects English text typed with the Persian keyboard layout (and the reverse) on X11 and suggests the converted text as a desktop notification. It runs in the foreground and never stores or replaces typed text."
 assets = [
     ["target/release/typefix", "usr/bin/", "755"],
+    ["target/release/typefix-gui", "usr/bin/", "755"],
     ["../Resources/en_50k.txt", "usr/share/typefix/", "644"],
     ["../Resources/fa_50k.txt", "usr/share/typefix/", "644"],
     ["packaging/typefix.desktop", "usr/share/applications/", "644"],
     ["../icon/icon_1024.png", "usr/share/icons/hicolor/1024x1024/apps/typefix.png", "644"],
+    ["packaging/icons/typefix-16.png", "usr/share/icons/hicolor/16x16/apps/typefix.png", "644"],
+    ["packaging/icons/typefix-32.png", "usr/share/icons/hicolor/32x32/apps/typefix.png", "644"],
+    ["packaging/icons/typefix-48.png", "usr/share/icons/hicolor/48x48/apps/typefix.png", "644"],
+    ["packaging/icons/typefix-64.png", "usr/share/icons/hicolor/64x64/apps/typefix.png", "644"],
+    ["packaging/icons/typefix-128.png", "usr/share/icons/hicolor/128x128/apps/typefix.png", "644"],
+    ["packaging/icons/typefix-256.png", "usr/share/icons/hicolor/256x256/apps/typefix.png", "644"],
+    ["packaging/icons/typefix-512.png", "usr/share/icons/hicolor/512x512/apps/typefix.png", "644"],
     ["README.md", "usr/share/doc/typefix/README.md", "644"],
 ]
 
@@ -70,13 +78,22 @@ url = "https://github.com/mamsm-dev/TypeFix"
 auto-req = "disabled"
 assets = [
     { source = "target/release/typefix", dest = "/usr/bin/typefix", mode = "755" },
+    { source = "target/release/typefix-gui", dest = "/usr/bin/typefix-gui", mode = "755" },
     { source = "../Resources/en_50k.txt", dest = "/usr/share/typefix/en_50k.txt", mode = "644" },
     { source = "../Resources/fa_50k.txt", dest = "/usr/share/typefix/fa_50k.txt", mode = "644" },
     { source = "packaging/typefix.desktop", dest = "/usr/share/applications/typefix.desktop", mode = "644" },
     { source = "../icon/icon_1024.png", dest = "/usr/share/icons/hicolor/1024x1024/apps/typefix.png", mode = "644" },
+    { source = "packaging/icons/typefix-16.png", dest = "/usr/share/icons/hicolor/16x16/apps/typefix.png", mode = "644" },
+    { source = "packaging/icons/typefix-32.png", dest = "/usr/share/icons/hicolor/32x32/apps/typefix.png", mode = "644" },
+    { source = "packaging/icons/typefix-48.png", dest = "/usr/share/icons/hicolor/48x48/apps/typefix.png", mode = "644" },
+    { source = "packaging/icons/typefix-64.png", dest = "/usr/share/icons/hicolor/64x64/apps/typefix.png", mode = "644" },
+    { source = "packaging/icons/typefix-128.png", dest = "/usr/share/icons/hicolor/128x128/apps/typefix.png", mode = "644" },
+    { source = "packaging/icons/typefix-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/typefix.png", mode = "644" },
+    { source = "packaging/icons/typefix-512.png", dest = "/usr/share/icons/hicolor/512x512/apps/typefix.png", mode = "644" },
     { source = "../LICENSE", dest = "/usr/share/licenses/typefix/LICENSE", mode = "644" },
 ]
 
 [package.metadata.generate-rpm.requires]
 libxkbcommon = "*"
 setxkbmap = "*"
+gtk3 = "*"

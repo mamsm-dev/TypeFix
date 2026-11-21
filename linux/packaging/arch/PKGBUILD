@@ -6,9 +6,9 @@ pkgdesc="Keyboard layout mistake detector for English and Persian (X11)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/mamsm-dev/TypeFix"
 license=('MIT')
-depends=('libxkbcommon' 'xorg-setxkbmap' 'glibc' 'gcc-libs')
+depends=('libxkbcommon' 'xorg-setxkbmap' 'gtk3' 'glibc' 'gcc-libs')
 optdepends=('libnotify: desktop notifications for suggestions')
-makedepends=('cargo')
+makedepends=('cargo' 'pkgconf')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
@@ -20,13 +20,19 @@ _srcdir() {
 build() {
   cd "$(_srcdir)/linux"
   export CARGO_TARGET_DIR=target
-  cargo build --release --bin typefix
+  cargo build --release --features gui --bin typefix --bin typefix-gui
 }
 
 package() {
   local root
   root="$(_srcdir)"
   install -Dm755 "$root/linux/target/release/typefix" "$pkgdir/usr/bin/typefix"
+  install -Dm755 "$root/linux/target/release/typefix-gui" "$pkgdir/usr/bin/typefix-gui"
+  local size
+  for size in 16 32 48 64 128 256 512; do
+    install -Dm644 "$root/linux/packaging/icons/typefix-$size.png" \
+      "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/typefix.png"
+  done
   install -Dm644 "$root/Resources/en_50k.txt" "$pkgdir/usr/share/typefix/en_50k.txt"
   install -Dm644 "$root/Resources/fa_50k.txt" "$pkgdir/usr/share/typefix/fa_50k.txt"
   install -Dm644 "$root/linux/packaging/typefix.desktop" "$pkgdir/usr/share/applications/typefix.desktop"

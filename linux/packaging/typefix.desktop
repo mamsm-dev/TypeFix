@@ -1,10 +1,14 @@
 [Desktop Entry]
 Type=Application
 Name=TypeFix
+Name[fa]=تایپ‌فیکس
 GenericName=Keyboard layout fixer
-Comment=Detects English/Persian keyboard layout mistakes on X11
-Exec=typefix
+GenericName[fa]=تبدیل چیدمان صفحه‌کلید
+Comment=Convert text between English and Persian keyboard layouts
+Comment[fa]=تبدیل متن بین چیدمان صفحه‌کلید انگلیسی و فارسی
+Exec=typefix-gui
 Icon=typefix
-Terminal=true
+Terminal=false
+StartupNotify=true
 Categories=Utility;
 Keywords=keyboard;layout;persian;farsi;
