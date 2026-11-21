@@ -48,7 +48,7 @@ The Linux implementation uses the shared English and Persian word-frequency file
 
 ## The `typefix-gui` settings window
 
-`src/bin/typefix_gui.rs` (cargo feature `gui`, GTK 3) is the main way to configure TypeFix. It owns a `service::Service`, which runs the shortcut worker (and the optional suggestion worker) on their own threads with their own X11 connections, so a new shortcut can be applied without restarting. The shortcut recorder reads the pressed combination from GDK (key name from the first layout group, so it reads the same under the Persian layout), validates it with `shortcut::Shortcut::parse`, and falls back to the previous shortcut if the grab fails. Settings are written to `~/.config/typefix/config` (`config.rs`). The window uses a custom CSS provider with accent `#18B0B0` and separate light/dark palettes; "system" asks `gsettings` for the desktop's color scheme. The interface is available in English and Persian (right-to-left). Closing the window only hides it; the process keeps the application alive and a second launch presents the existing window.
+`src/bin/typefix_gui.rs` (cargo feature `gui`, GTK 3) is the main way to configure TypeFix. It owns a `service::Service`, which runs the shortcut worker (and the optional suggestion worker) on their own threads with their own X11 connections, so a new shortcut can be applied without restarting. The shortcut recorder reads the pressed combination from GDK (key name from the first layout group, so it reads the same under the Persian layout), validates it with `shortcut::Shortcut::parse`, and falls back to the previous shortcut if the grab fails. Settings are written to `~/.config/typefix/config` (`config.rs`). The window uses a custom CSS provider with accent `#18B0B0` and separate light/dark palettes; "system" asks `gsettings` for the desktop's color scheme. The interface is available in English and Persian (right-to-left). Closing the window only hides it; the process keeps the application alive, a second launch presents the existing window, and a tray icon (`ksni`, StatusNotifierItem over D-Bus, icon sent as pixels) offers Open/Quit. The tray runs on its own thread and talks to the GTK thread through a channel.
 
 CI (`linux-ui-preview.yml`) starts the window under Xvfb for the four theme/language combinations and publishes screenshots to the `ui-previews` branch for review.
 
@@ -63,7 +63,7 @@ Selected and suggested text is kept in memory only. Suggestion text is handed to
 
 ## Release artifacts
 
-Pushing a tag such as `v0.3.0` (it must match the version in `Cargo.toml`) runs `.github/workflows/linux-release.yml`, which builds and attaches to the GitHub Release:
+Pushing a tag such as `v0.4.0` (it must match the version in `Cargo.toml`, and `CHANGELOG.md` must have a `## [0.4.0]` section, whose text becomes the release notes) runs `.github/workflows/linux-release.yml`, which builds and attaches to the GitHub Release:
 
 - `.AppImage` (x86_64, via linuxdeploy)
 - `.deb` (cargo-deb)

@@ -2,7 +2,7 @@
 
 TypeFix detects likely English ⇄ Persian keyboard-layout mistakes on Linux and suggests the correctly converted text.
 
-> **Development status:** TypeFix has a settings window (`typefix-gui`, GTK 3, light/dark theme with the #18B0B0 accent, English/Persian interface) and a command-line app (`typefix`). Select text and press a configurable shortcut to convert it between the English and Persian keyboard layouts. It is **not yet a complete desktop application** (no tray icon, no Wayland support) and has had only limited testing on a real desktop.
+> **Development status:** TypeFix has a settings window (`typefix-gui`, GTK 3, light/dark theme with the #18B0B0 accent, English/Persian interface) and a command-line app (`typefix`). Select text and press a configurable shortcut to convert it between the English and Persian keyboard layouts. It is **not yet a complete desktop application** (no Wayland support) and has had only limited testing on a real desktop.
 
 ## Implemented
 
@@ -28,7 +28,7 @@ TypeFix detects likely English ⇄ Persian keyboard-layout mistakes on Linux and
 | Suggestions as desktop notifications (`notify-send`) | Implemented; not validated on a real desktop |
 | Settings window (shortcut, suggestions, theme, language) | Implemented (GTK 3); layout checked with screenshots under Xvfb |
 | Convert selected text with a configurable shortcut | Implemented; paste via Shift+Insert has only limited testing across applications |
-| Tray icon | Not implemented |
+| Tray icon (open window / quit) | Implemented; not yet tested on a real desktop |
 | Wayland / IBus | Planned |
 | Fcitx5 | Planned |
 | Linux packages (AppImage, deb, rpm, Arch) | Built and published by CI from version tags; the AppImage with the settings window is untested on real systems |
@@ -47,13 +47,13 @@ Download a package from the [latest release](https://github.com/mamsm-dev/TypeFi
 
 ```bash
 # Debian / Ubuntu
-sudo apt install ./typefix_0.3.0-1_amd64.deb
+sudo apt install ./typefix_0.4.0-1_amd64.deb
 # Fedora / openSUSE
-sudo dnf install ./typefix-0.3.0-1.x86_64.rpm
+sudo dnf install ./typefix-0.4.0-1.x86_64.rpm
 # Arch Linux
-sudo pacman -U typefix-0.3.0-1-x86_64.pkg.tar.zst
+sudo pacman -U typefix-0.4.0-1-x86_64.pkg.tar.zst
 # AppImage (any distribution)
-chmod +x typefix-0.3.0-x86_64.AppImage && ./typefix-0.3.0-x86_64.AppImage
+chmod +x typefix-0.4.0-x86_64.AppImage && ./typefix-0.4.0-x86_64.AppImage
 ```
 
 The release also contains a `typefix-debug` Arch package with debug symbols; you do not need it.
@@ -68,7 +68,7 @@ Start **TypeFix** from your application menu (or run `typefix-gui`). The window 
 - **Turn "Suggest while typing" on or off** and choose which layout the typed text comes from.
 - **Pick the theme** (follow system, light or dark) and the **interface language** (English or فارسی, including right-to-left layout).
 
-Settings are saved in `~/.config/typefix/config`, shared with the command-line `typefix`. Closing the window hides it and TypeFix keeps converting in the background; start TypeFix again to show the window, or press *Quit* to stop it. There is no tray icon and no autostart yet: add `typefix-gui` to your desktop's startup applications to run it at login.
+Settings are saved in `~/.config/typefix/config`, shared with the command-line `typefix`. Closing the window hides it and TypeFix keeps converting in the background; use the tray icon (or start TypeFix again) to show the window, or press *Quit* to stop it. A tray icon (StatusNotifierItem) with the TypeFix icon is shown too: click it or choose *Open TypeFix* to show the window, *Quit* to stop. GNOME needs the AppIndicator/KStatusNotifierItem extension to display tray icons (Zorin OS and Ubuntu include it). There is no autostart yet: add `typefix-gui` to your desktop's startup applications to run it at login.
 
 ### Command line
 
@@ -154,6 +154,7 @@ The diagnostic prints key metadata, not typed text. Stop it with Ctrl+C. It obse
 ## Project layout
 
 - `linux/`: Rust core, X11 backend, the `typefix` and `typefix-gui` apps, packaging files, session documentation, and security model.
+- `CHANGELOG.md`: changes of each version; the section of a version becomes its GitHub release notes.
 - `.github/workflows/`: `linux-core.yml` (tests) and `linux-release.yml` (builds packages and publishes a GitHub Release when a `v*` tag is pushed).
 - `Resources/en_50k.txt` and `Resources/fa_50k.txt`: shared English and Persian word-frequency data.
 - `assets/`: project artwork and demo media.

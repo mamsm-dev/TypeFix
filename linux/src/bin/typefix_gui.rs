@@ -336,8 +336,8 @@ fn tray_icons() -> Vec<ksni::Icon> {
             pixbuf
         } else {
             match pixbuf.add_alpha(false, 0, 0, 0) {
-                Some(with_alpha) => with_alpha,
-                None => continue,
+                Ok(with_alpha) => with_alpha,
+                Err(_) => continue,
             }
         };
         let (width, height) = (pixbuf.width() as usize, pixbuf.height() as usize);
