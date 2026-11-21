@@ -1,0 +1,51 @@
+name: Linux UI preview
+
+# Starts the settings window under Xvfb and uploads screenshots of the light
+# and dark themes in English and Persian, so UI changes can be reviewed.
+
+on:
+  push:
+    branches: ['feature/**']
+    paths:
+      - "linux/**"
+      - ".github/workflows/linux-ui-preview.yml"
+  workflow_dispatch:
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libxkbcommon-dev libx11-dev libxi-dev libgtk-3-dev xkb-data x11-xkb-utils xvfb imagemagick fonts-noto-core fonts-dejavu-core dbus
+      - name: Build the settings window
+        run: cargo build --manifest-path linux/Cargo.toml --features gui --bin typefix-gui
+      - name: Take screenshots
+        run: |
+          mkdir -p shots
+          for variant in light-en dark-en light-fa dark-fa; do
+            theme=${variant%-*}
+            lang=${variant#*-}
+            export XDG_CONFIG_HOME="$(mktemp -d)"
+            mkdir -p "$XDG_CONFIG_HOME/typefix"
+            printf 'theme = %s\nlanguage = %s\n' "$theme" "$lang" > "$XDG_CONFIG_HOME/typefix/config"
+            export TYPEFIX_DATA_DIR="$PWD/Resources"
+            export SHOT="$PWD/shots/$variant.png"
+            xvfb-run -a -s "-screen 0 760x860x24" dbus-run-session -- bash -c '
+              setxkbmap -layout us,ir
+              linux/target/debug/typefix-gui > "$SHOT.log" 2>&1 &
+              pid=$!
+              sleep 5
+              import -window root "$SHOT"
+              kill $pid
+            ' || true
+          done
+          ls -l shots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: shots/*
+          if-no-files-found: error
