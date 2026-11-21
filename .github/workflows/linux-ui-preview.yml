@@ -37,7 +37,7 @@ jobs:
             printf 'theme = %s\nlanguage = %s\n' "$theme" "$lang" > "$XDG_CONFIG_HOME/typefix/config"
             export TYPEFIX_DATA_DIR="$PWD/Resources"
             export SHOT="$PWD/shots/$variant.png"
-            xvfb-run -a -s "-screen 0 760x860x24" dbus-run-session -- bash -c '
+            xvfb-run -a -s "-screen 0 760x860x24 -noreset" dbus-run-session -- bash -c '
               setxkbmap -layout us,ir > "$SHOT.xkb" 2>&1 || echo "setxkbmap failed" >> "$SHOT.xkb"
               setxkbmap -query >> "$SHOT.xkb" 2>&1
               linux/target/debug/typefix-gui > "$SHOT.log" 2>&1 &
