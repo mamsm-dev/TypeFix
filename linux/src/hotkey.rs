@@ -6,7 +6,11 @@
 //! synthetic Shift+Insert through XTest to paste the converted text. No uinput
 //! or raw device access is used.
 
-use std::{thread, time::{Duration, Instant}};
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    thread,
+    time::{Duration, Instant},
+};
 
 use x11rb::{
     connection::Connection,
@@ -91,19 +95,22 @@ impl HotkeyListener {
         Ok(Self { connection, root, keycode })
     }
 
-    /// Blocks and calls `on_trigger` every time the shortcut is pressed.
-    pub fn run<F: FnMut()>(&self, mut on_trigger: F) -> Result<(), String> {
-        loop {
-            let event = self
-                .connection
-                .wait_for_event()
-                .map_err(|e| format!("X11 connection lost: {e}"))?;
-            if let Event::KeyPress(press) = event {
-                if press.detail == self.keycode {
-                    on_trigger();
+    /// Calls `on_trigger` every time the shortcut is pressed, until `stop` is
+    /// set. Dropping the listener afterwards releases the key grab.
+    pub fn run_until<F: FnMut()>(&self, stop: &AtomicBool, mut on_trigger: F) -> Result<(), String> {
+        while !stop.load(Ordering::Relaxed) {
+            match self.connection.poll_for_event() {
+                Ok(Some(Event::KeyPress(press))) => {
+                    if press.detail == self.keycode {
+                        on_trigger();
+                    }
                 }
+                Ok(Some(_)) => {}
+                Ok(None) => thread::sleep(Duration::from_millis(15)),
+                Err(error) => return Err(format!("X11 connection lost: {error}")),
             }
         }
+        Ok(())
     }
 
     /// Waits (up to ~1.5 s) until Ctrl/Alt/Shift/Super are physically released,

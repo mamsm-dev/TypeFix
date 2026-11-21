@@ -5,6 +5,10 @@
 //! shortcut = Ctrl+Alt+Space
 //! # Also watch typing and suggest conversions as notifications (off by default).
 //! suggest = false
+//! # Settings written by the UI:
+//! theme = system      # system, light or dark
+//! language = en       # UI language: en or fa
+//! source = en         # direction for suggestions: en or fa
 //! ```
 
 use std::{env, fs, path::PathBuf};
@@ -13,6 +17,9 @@ use std::{env, fs, path::PathBuf};
 pub struct Config {
     pub shortcut: Option<String>,
     pub suggest: Option<bool>,
+    pub theme: Option<String>,
+    pub language: Option<String>,
+    pub source: Option<String>,
 }
 
 pub fn config_path() -> Option<PathBuf> {
@@ -44,10 +51,52 @@ impl Config {
                         _ => return Err(format!("line {}: suggest must be true or false", index + 1)),
                     })
                 }
+                "theme" => match value {
+                    "system" | "light" | "dark" => config.theme = Some(value.to_owned()),
+                    _ => return Err(format!("line {}: theme must be system, light or dark", index + 1)),
+                },
+                "language" => match value {
+                    "en" | "fa" => config.language = Some(value.to_owned()),
+                    _ => return Err(format!("line {}: language must be en or fa", index + 1)),
+                },
+                "source" => match value {
+                    "en" | "fa" => config.source = Some(value.to_owned()),
+                    _ => return Err(format!("line {}: source must be en or fa", index + 1)),
+                },
                 other => return Err(format!("line {}: unknown setting {other:?}", index + 1)),
             }
         }
         Ok(config)
+    }
+
+    /// Serialises the settings that are set, in the file format.
+    pub fn to_text(&self) -> String {
+        let mut text = String::from("# TypeFix settings (edited by the TypeFix window or by hand)\n");
+        if let Some(value) = &self.shortcut {
+            text.push_str(&format!("shortcut = {value}\n"));
+        }
+        if let Some(value) = self.suggest {
+            text.push_str(&format!("suggest = {value}\n"));
+        }
+        if let Some(value) = &self.theme {
+            text.push_str(&format!("theme = {value}\n"));
+        }
+        if let Some(value) = &self.language {
+            text.push_str(&format!("language = {value}\n"));
+        }
+        if let Some(value) = &self.source {
+            text.push_str(&format!("source = {value}\n"));
+        }
+        text
+    }
+
+    /// Writes the config file, creating its directory if needed.
+    pub fn save(&self) -> Result<(), String> {
+        let path = config_path().ok_or("cannot determine the config directory")?;
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+        }
+        fs::write(&path, self.to_text()).map_err(|e| format!("cannot write {}: {e}", path.display()))
     }
 
     /// Loads the user's config file; a missing file means defaults.
@@ -71,6 +120,25 @@ mod tests {
         let config = Config::parse("# comment\n\nshortcut = \"Ctrl+Shift+F9\"\nsuggest = yes\n").unwrap();
         assert_eq!(config.shortcut.as_deref(), Some("Ctrl+Shift+F9"));
         assert_eq!(config.suggest, Some(true));
+    }
+
+    #[test]
+    fn round_trips_through_text() {
+        let config = Config {
+            shortcut: Some("Ctrl+Alt+K".into()),
+            suggest: Some(false),
+            theme: Some("dark".into()),
+            language: Some("fa".into()),
+            source: Some("en".into()),
+        };
+        assert_eq!(Config::parse(&config.to_text()).unwrap(), config);
+    }
+
+    #[test]
+    fn rejects_unknown_theme_and_language() {
+        assert!(Config::parse("theme = purple").is_err());
+        assert!(Config::parse("language = de").is_err());
+        assert!(Config::parse("source = xx").is_err());
     }
 
     #[test]

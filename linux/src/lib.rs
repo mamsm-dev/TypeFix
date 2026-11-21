@@ -133,6 +133,7 @@ pub mod compose;
 pub mod config;
 pub mod convert;
 pub mod hotkey;
+pub mod service;
 pub mod session;
 pub mod shortcut;
 pub mod x11;
