@@ -18,7 +18,7 @@ The X11 connection exposes explicit observation APIs:
 
 `X11SessionConnection::handle_session_event()` dispatches one X11 event into `ComposedTypingSession`. `X11SessionConnection::run_session_loop()` provides the explicit foreground loop: it enables the required subscriptions, dispatches events, and invokes a caller-provided callback for non-empty `SessionAction` values until the caller's stop predicate requests termination.
 
-No observer is enabled by the probe or silently at application startup. The foreground loop is opt-in. It does not grab or consume application input, log typed text, or inject replacements. The diagnostic binary `typefix-x11-events` reports metadata only and should be used only during an intentional test.
+No observer is enabled by the probe or silently at application startup. The foreground loop is opt-in. It does not grab or consume application input, log typed text, or inject replacements (the separate shortcut mode in `hotkey.rs` grabs one key combination and sends one paste keystroke). The diagnostic binary `typefix-x11-events` reports metadata only and should be used only during an intentional test.
 
 ## Compose and dead keys
 

@@ -38,7 +38,7 @@ Input-method support depends on the active input method and on applications acce
 
 Implemented: shared English/Persian detection; backend-neutral typing and Compose state; X11/XInput2 event delivery; XKB translation using server-supplied modifier/group snapshots; key classification; focus and keymap-change handling; and a callback-driven foreground session loop.
 
-Not implemented: tray/menu UI, safe text replacement, Wayland/IBus, and Fcitx5. Suggestions are shown as desktop notifications by the foreground `typefix` binary.
+Not implemented: tray/menu UI, Wayland/IBus, and Fcitx5. Selected-text replacement uses clipboard + Shift+Insert and is only lightly tested across applications. Suggestions are shown as desktop notifications by the foreground `typefix` binary.
 
 See [SESSION.md](SESSION.md) for the event/session contract and [SECURITY.md](SECURITY.md) for the privacy boundary.
 
@@ -48,9 +48,12 @@ The Linux implementation uses the shared English and Persian word-frequency file
 
 ## The `typefix` app
 
-`src/bin/typefix.rs` is a foreground X11 frontend. It connects to the X server, builds the layout conversion map from the active XKB layout groups (`us` or the first non-`ir` layout, and `ir`), runs `X11SessionConnection::run_session_loop()`, and shows each suggestion with `notify-send` (falling back to the terminal). It does not replace text and is not started automatically. `--source en|fa` selects the direction; dictionaries are found via `--data-dir`, `TYPEFIX_DATA_DIR`, `../share/typefix` next to the binary (AppImage), `/usr/share/typefix`, or the repository's `Resources/`.
+`src/bin/typefix.rs` is a foreground X11 frontend with two parts:
 
-Suggestion text is handed to `notify-send` and thus to the desktop notification service, which may retain it; see [SECURITY.md](SECURITY.md).
+- **Shortcut mode (default).** `hotkey.rs` passively grabs one configurable key combination (default `Ctrl+Alt+Space`, set with `--shortcut` or `~/.config/typefix/config`, parsed by `shortcut.rs`/`config.rs`). On a press it waits for the modifiers to be released, reads the PRIMARY selection (`arboard`), converts it with `convert.rs` (direction detected from the text, layout maps built from the active XKB groups: `us` or the first non-`ir` layout, and `ir`), puts the result on PRIMARY and CLIPBOARD, sends one synthetic Shift+Insert through XTest, and restores the previous clipboard text.
+- **Suggestion mode (`--suggest`, off by default).** Runs `X11SessionConnection::run_session_loop()` on a separate connection and shows each suggestion with `notify-send` (falling back to the terminal). `--source en|fa` selects the direction; dictionaries are found via `--data-dir`, `TYPEFIX_DATA_DIR`, `../share/typefix` next to the binary (AppImage), `/usr/share/typefix`, or the repository's `Resources/`.
+
+Selected and suggested text is kept in memory only. Suggestion text is handed to `notify-send` and thus to the desktop notification service, which may retain it; see [SECURITY.md](SECURITY.md).
 
 ## Release artifacts
 

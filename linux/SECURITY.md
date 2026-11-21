@@ -10,7 +10,9 @@ This is not isolated to one application: events may be visible across applicatio
 
 The `typefix` app passes each suggestion (the typed word and its conversion) to `notify-send`, i.e. to another local process and your desktop's notification service. That service may display it in a history or log it; TypeFix does not control this. If that is unacceptable, run the core without the notification frontend or disable notification history.
 
-The current implementation does not inject or replace text, create a daemon, install a privileged service, or access raw input devices. Typed content used by the session core is transient in-memory state; it must not be logged, persisted, or transmitted. Session and Compose state must be cleared on focus changes, navigation, shortcuts, cancellation, disable, and keymap changes.
+Shortcut mode (the default of the `typefix` app) passively grabs only the one configured key combination; it does not observe other keystrokes. When the shortcut is pressed it reads the selected text from the X selection, converts it in memory, temporarily replaces the clipboard/selection with the result, and sends a single synthetic Shift+Insert through XTest to paste it, then restores the previous clipboard text. Other programs that monitor the clipboard can observe the converted text during that moment. No uinput or raw device access is used.
+
+The session loop (`--suggest`) does not inject or replace text. The current implementation does not create a daemon, install a privileged service, or access raw input devices. Typed content used by the session core is transient in-memory state; it must not be logged, persisted, or transmitted. Session and Compose state must be cleared on focus changes, navigation, shortcuts, cancellation, disable, and keymap changes.
 
 ## Wayland
 
@@ -20,6 +22,6 @@ The planned Wayland implementation is an input-method integration (IBus first, F
 
 - No privileged daemon reading `/dev/input`.
 - No silent global keyboard capture.
-- No uinput-based injection.
+- No uinput-based injection (the shortcut paste uses a single XTest Shift+Insert).
 - No claim of reliable password-field detection across arbitrary applications.
 - No persistent typing history, telemetry, or network transmission of typed content.
