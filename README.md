@@ -2,7 +2,7 @@
 
 TypeFix detects likely English ⇄ Persian keyboard-layout mistakes on Linux and suggests the correctly converted text.
 
-> **Development status:** TypeFix runs as a foreground X11 command-line app (`typefix`). Select text and press a configurable shortcut to convert it between the English and Persian keyboard layouts. Optional typing suggestions are shown as notifications. It is **not yet a complete desktop application** (no tray UI, no Wayland support) and has had only limited testing on a real desktop.
+> **Development status:** TypeFix has a settings window (`typefix-gui`, GTK 3, light/dark theme with the #18B0B0 accent, English/Persian interface) and a command-line app (`typefix`). Select text and press a configurable shortcut to convert it between the English and Persian keyboard layouts. It is **not yet a complete desktop application** (no tray icon, no Wayland support) and has had only limited testing on a real desktop.
 
 ## Implemented
 
@@ -11,6 +11,7 @@ TypeFix detects likely English ⇄ Persian keyboard-layout mistakes on Linux and
 - X11/XInput2 event observation with effective modifier and active-layout-group snapshots.
 - XKB key translation, Compose handling, focus/navigation reset handling, and keymap-change refresh.
 - Explicit foreground session loop that delivers non-empty session actions to a caller-provided callback.
+- `typefix-gui` settings window: record a new shortcut, switch typing suggestions on/off, choose theme (system/light/dark) and interface language; closing it keeps TypeFix running in the background.
 - `typefix` foreground app: a configurable global shortcut converts the selected text between the English and Persian layouts (the layout map is built from your active XKB layouts); optional `--suggest` mode shows typing suggestions with `notify-send`.
 - Release packages (AppImage, `.deb`, `.rpm`, Arch) built by CI and published on GitHub Releases.
 - Automated Xvfb integration coverage, including an end-to-end English-to-Persian suggestion test.
@@ -25,11 +26,12 @@ TypeFix detects likely English ⇄ Persian keyboard-layout mistakes on Linux and
 | XKB translation and layout-group handling | Implemented; real desktop/layout validation remains |
 | Key repeat and real KDE session behavior | Further validation required |
 | Suggestions as desktop notifications (`notify-send`) | Implemented; not validated on a real desktop |
-| Tray/menu UI | Not implemented |
-| Safe text replacement in applications | Not implemented |
+| Settings window (shortcut, suggestions, theme, language) | Implemented (GTK 3); layout checked with screenshots under Xvfb |
+| Convert selected text with a configurable shortcut | Implemented; paste via Shift+Insert has only limited testing across applications |
+| Tray icon | Not implemented |
 | Wayland / IBus | Planned |
 | Fcitx5 | Planned |
-| Linux packages (AppImage, deb, rpm, Arch) | Published for v0.1.0; install not yet tested on real systems |
+| Linux packages (AppImage, deb, rpm, Arch) | Built and published by CI from version tags; the AppImage with the settings window is untested on real systems |
 
 See [linux/README.md](linux/README.md), [linux/SESSION.md](linux/SESSION.md), and [linux/SECURITY.md](linux/SECURITY.md) for technical details and security boundaries.
 
@@ -45,18 +47,30 @@ Download a package from the [latest release](https://github.com/mamsm-dev/TypeFi
 
 ```bash
 # Debian / Ubuntu
-sudo apt install ./typefix_0.2.0-1_amd64.deb
+sudo apt install ./typefix_0.3.0-1_amd64.deb
 # Fedora / openSUSE
-sudo dnf install ./typefix-0.2.0-1.x86_64.rpm
+sudo dnf install ./typefix-0.3.0-1.x86_64.rpm
 # Arch Linux
-sudo pacman -U typefix-0.2.0-1-x86_64.pkg.tar.zst
+sudo pacman -U typefix-0.3.0-1-x86_64.pkg.tar.zst
 # AppImage (any distribution)
-chmod +x typefix-0.2.0-x86_64.AppImage && ./typefix-0.2.0-x86_64.AppImage
+chmod +x typefix-0.3.0-x86_64.AppImage && ./typefix-0.3.0-x86_64.AppImage
 ```
 
 The release also contains a `typefix-debug` Arch package with debug symbols; you do not need it.
 
 ## Usage
+
+### Settings window
+
+Start **TypeFix** from your application menu (or run `typefix-gui`). The window shows the active conversion shortcut and lets you:
+
+- **Change the shortcut:** click *Change shortcut*, then press the key combination you want (it needs at least one of Ctrl, Alt, Shift, Super; Esc cancels). If another application already uses the combination, the previous shortcut stays active and the window explains the problem.
+- **Turn "Suggest while typing" on or off** and choose which layout the typed text comes from.
+- **Pick the theme** (follow system, light or dark) and the **interface language** (English or فارسی, including right-to-left layout).
+
+Settings are saved in `~/.config/typefix/config`, shared with the command-line `typefix`. Closing the window hides it and TypeFix keeps converting in the background; start TypeFix again to show the window, or press *Quit* to stop it. There is no tray icon and no autostart yet: add `typefix-gui` to your desktop's startup applications to run it at login.
+
+### Command line
 
 Requirements: an X11 session (Wayland-only sessions are not supported yet), the `setxkbmap` tool, and both a US/English layout and a Persian (`ir`) layout configured in your keyboard settings. `notify-send` (`libnotify`) is recommended; without it suggestions are printed to the terminal.
 
@@ -83,6 +97,12 @@ How it works: the selected text is read from the X selection, converted in memor
 `--suggest` mode additionally watches typing: type a word with the wrong layout and press Space; the converted text appears as a notification (nothing is replaced). It also accepts `--source en|fa` and `--data-dir DIR` (or `TYPEFIX_DATA_DIR`) for the dictionary files. Other options: `--help`, `--version`.
 
 ## Build and test
+
+The settings window is behind the `gui` cargo feature and needs the GTK 3 development files (`libgtk-3-dev` on Debian/Ubuntu):
+
+```bash
+cargo build --manifest-path linux/Cargo.toml --features gui --bin typefix-gui
+```
 
 Requirements: Rust stable, a C toolchain, `libxkbcommon` development headers, X11/XInput2 development libraries, XKB data, Xvfb, and xdotool.
 
@@ -133,10 +153,11 @@ The diagnostic prints key metadata, not typed text. Stop it with Ctrl+C. It obse
 
 ## Project layout
 
-- `linux/`: Rust core, X11 backend, the `typefix` app, packaging files, session documentation, and security model.
+- `linux/`: Rust core, X11 backend, the `typefix` and `typefix-gui` apps, packaging files, session documentation, and security model.
 - `.github/workflows/`: `linux-core.yml` (tests) and `linux-release.yml` (builds packages and publishes a GitHub Release when a `v*` tag is pushed).
 - `Resources/en_50k.txt` and `Resources/fa_50k.txt`: shared English and Persian word-frequency data.
 - `assets/`: project artwork and demo media.
+- `icon/`: the application icon (`linux/packaging/icons/` holds the sizes used by the packages).
 
 ## License
 

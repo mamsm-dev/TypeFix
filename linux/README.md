@@ -46,6 +46,12 @@ See [SESSION.md](SESSION.md) for the event/session contract and [SECURITY.md](SE
 
 The Linux implementation uses the shared English and Persian word-frequency files in `../Resources/`. Layout conversion uses the active XKB keymap rather than a hard-coded US mapping.
 
+## The `typefix-gui` settings window
+
+`src/bin/typefix_gui.rs` (cargo feature `gui`, GTK 3) is the main way to configure TypeFix. It owns a `service::Service`, which runs the shortcut worker (and the optional suggestion worker) on their own threads with their own X11 connections, so a new shortcut can be applied without restarting. The shortcut recorder reads the pressed combination from GDK (key name from the first layout group, so it reads the same under the Persian layout), validates it with `shortcut::Shortcut::parse`, and falls back to the previous shortcut if the grab fails. Settings are written to `~/.config/typefix/config` (`config.rs`). The window uses a custom CSS provider with accent `#18B0B0` and separate light/dark palettes; "system" asks `gsettings` for the desktop's color scheme. The interface is available in English and Persian (right-to-left). Closing the window only hides it; the process keeps the application alive and a second launch presents the existing window.
+
+CI (`linux-ui-preview.yml`) starts the window under Xvfb for the four theme/language combinations and publishes screenshots to the `ui-previews` branch for review.
+
 ## The `typefix` app
 
 `src/bin/typefix.rs` is a foreground X11 frontend with two parts:
@@ -57,7 +63,7 @@ Selected and suggested text is kept in memory only. Suggestion text is handed to
 
 ## Release artifacts
 
-Pushing a tag such as `v0.1.0` (it must match the version in `Cargo.toml`) runs `.github/workflows/linux-release.yml`, which builds and attaches to the GitHub Release:
+Pushing a tag such as `v0.3.0` (it must match the version in `Cargo.toml`) runs `.github/workflows/linux-release.yml`, which builds and attaches to the GitHub Release:
 
 - `.AppImage` (x86_64, via linuxdeploy)
 - `.deb` (cargo-deb)
@@ -65,7 +71,7 @@ Pushing a tag such as `v0.1.0` (it must match the version in `Cargo.toml`) runs 
 - Arch `.pkg.tar.zst` (makepkg in an Arch container, from `packaging/arch/PKGBUILD`; a `typefix-debug` package is produced as well)
 - `SHA256SUMS`
 
-The v0.1.0 release was built by this workflow and published successfully. v0.1.0 did not detect anything on a real desktop (keys were only observed when no application window had focus); this is fixed in v0.1.1. The packages have not yet been installed and run on real systems, and AppImage/rpm/deb/Arch are x86_64 only.
+Releases v0.1.0 and later were built by this workflow. v0.1.0 did not detect typing on a real desktop (keys were only observed when no application window had focus); this is fixed in v0.1.1. The packages contain both `typefix` and `typefix-gui`; the AppImage bundles GTK through linuxdeploy-plugin-gtk. The packages have not yet been installed and run on real systems, and AppImage/rpm/deb/Arch are x86_64 only.
 
 ## Milestones
 
