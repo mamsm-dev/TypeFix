@@ -11,6 +11,9 @@ on:
       - ".github/workflows/linux-ui-preview.yml"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   screenshots:
     runs-on: ubuntu-latest
@@ -49,3 +52,15 @@ jobs:
           name: ui-screenshots
           path: shots/*
           if-no-files-found: error
+      - name: Publish screenshots to the ui-previews branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          cp -r shots /tmp/shots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git checkout --orphan ui-previews
+          git rm -rf --quiet . || true
+          cp /tmp/shots/* .
+          git add -A
+          git commit -q -m "UI screenshots for ${GITHUB_SHA}"
+          git push -f origin ui-previews
