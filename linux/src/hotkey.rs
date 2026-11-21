@@ -11,7 +11,7 @@ use std::{thread, time::{Duration, Instant}};
 use x11rb::{
     connection::Connection,
     protocol::{
-        xproto::{ConnectionExt as XprotoConnectionExt, GrabMode, KEY_PRESS_EVENT, KEY_RELEASE_EVENT},
+        xproto::{ConnectionExt as XprotoConnectionExt, GrabMode, ModMask, KEY_PRESS_EVENT, KEY_RELEASE_EVENT},
         xtest::ConnectionExt as XTestConnectionExt,
         Event,
     },
@@ -80,7 +80,7 @@ impl HotkeyListener {
         let base = shortcut.modifier_mask();
         for extra in [0, LOCK_MASK, NUM_LOCK_MASK, LOCK_MASK | NUM_LOCK_MASK] {
             connection
-                .grab_key(true, root, base | extra, keycode, GrabMode::ASYNC, GrabMode::ASYNC)
+                .grab_key(true, root, ModMask::from(base | extra), keycode, GrabMode::ASYNC, GrabMode::ASYNC)
                 .map_err(|e| format!("could not grab {shortcut}: {e}"))?
                 .check()
                 .map_err(|e| {
