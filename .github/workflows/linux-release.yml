@@ -116,6 +116,11 @@ jobs:
           cp linux/packaging/arch/PKGBUILD /home/builder/pkg/PKGBUILD
           chown builder /home/builder/pkg/PKGBUILD
           sed -i "s/^pkgver=.*/pkgver=${version}/" /home/builder/pkg/PKGBUILD
+          # Build exactly the checked-out commit instead of downloading the tag archive.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git archive --format=tar.gz --prefix="typefix-${version}/" -o "/home/builder/pkg/typefix-${version}.tar.gz" HEAD
+          sed -i 's|^source=.*|source=("typefix-$pkgver.tar.gz")|' /home/builder/pkg/PKGBUILD
+          chown builder /home/builder/pkg/PKGBUILD "/home/builder/pkg/typefix-${version}.tar.gz"
           cd /home/builder/pkg
           su builder -c "makepkg -s --noconfirm"
           mkdir -p "${GITHUB_WORKSPACE}/dist"
