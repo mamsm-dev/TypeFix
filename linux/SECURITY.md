@@ -8,6 +8,8 @@ X11 event observation is explicit opt-in and runs in the foreground. The session
 
 This is not isolated to one application: events may be visible across applications on the same X server. X11 does not provide reliable password-field detection or strong per-application isolation. Users who require strict isolation should not enable the X11 session loop.
 
+The `typefix` app passes each suggestion (the typed word and its conversion) to `notify-send`, i.e. to another local process and your desktop's notification service. That service may display it in a history or log it; TypeFix does not control this. If that is unacceptable, run the core without the notification frontend or disable notification history.
+
 The current implementation does not inject or replace text, create a daemon, install a privileged service, or access raw input devices. Typed content used by the session core is transient in-memory state; it must not be logged, persisted, or transmitted. Session and Compose state must be cleared on focus changes, navigation, shortcuts, cancellation, disable, and keymap changes.
 
 ## Wayland

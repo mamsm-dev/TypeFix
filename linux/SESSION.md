@@ -47,4 +47,4 @@ A complete desktop application must:
 
 X11 clients with access to the same server do not have strong per-application input isolation. Reliable password-field detection must not be claimed. Custom server-side keymap modifications may not be represented exactly by rebuilding from RMLVO settings. Automated Xvfb tests are not a substitute for real KDE/X11 validation.
 
-The real desktop smoke test remains pending. The UI, safe replacement, Wayland/IBus, and Fcitx5 are not implemented.
+The real desktop smoke test remains pending. A tray/menu UI, safe replacement, Wayland/IBus, and Fcitx5 are not implemented; the `typefix` app only shows notifications.

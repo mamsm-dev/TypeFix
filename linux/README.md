@@ -46,25 +46,29 @@ See [SESSION.md](SESSION.md) for the event/session contract and [SECURITY.md](SE
 
 The Linux implementation uses the shared English and Persian word-frequency files in `../Resources/`. Layout conversion uses the active XKB keymap rather than a hard-coded US mapping.
 
+## The `typefix` app
+
+`src/bin/typefix.rs` is a foreground X11 frontend. It connects to the X server, builds the layout conversion map from the active XKB layout groups (`us` or the first non-`ir` layout, and `ir`), runs `X11SessionConnection::run_session_loop()`, and shows each suggestion with `notify-send` (falling back to the terminal). It does not replace text and is not started automatically. `--source en|fa` selects the direction; dictionaries are found via `--data-dir`, `TYPEFIX_DATA_DIR`, `../share/typefix` next to the binary (AppImage), `/usr/share/typefix`, or the repository's `Resources/`.
+
+Suggestion text is handed to `notify-send` and thus to the desktop notification service, which may retain it; see [SECURITY.md](SECURITY.md).
+
 ## Release artifacts
 
-The `typefix` binary (`src/bin/typefix.rs`) is a foreground X11 frontend: it runs the session loop and shows suggestions via `notify-send`. It does not replace text.
-
-Pushing a tag such as `v0.1.0` (must match the version in `Cargo.toml`) runs `.github/workflows/linux-release.yml`, which builds and attaches to the GitHub Release:
+Pushing a tag such as `v0.1.0` (it must match the version in `Cargo.toml`) runs `.github/workflows/linux-release.yml`, which builds and attaches to the GitHub Release:
 
 - `.AppImage` (x86_64, via linuxdeploy)
 - `.deb` (cargo-deb)
 - `.rpm` (cargo-generate-rpm)
-- Arch `.pkg.tar.zst` (makepkg in an Arch container, from `packaging/arch/PKGBUILD`)
+- Arch `.pkg.tar.zst` (makepkg in an Arch container, from `packaging/arch/PKGBUILD`; a `typefix-debug` package is produced as well)
 - `SHA256SUMS`
 
-The release workflow has not been run yet; verify the first tag build before relying on it.
+The v0.1.0 release was built by this workflow and published successfully. The packages have not yet been installed and run on real systems, and AppImage/rpm/deb/Arch are x86_64 only.
 
 ## Milestones
 
 1. Shared detection core and backend-neutral typing-session state machine — implemented.
 2. X11 connection, XI2 observation, XKB translation, Compose, focus/keymap lifecycle, and foreground session loop — implemented; Xvfb-tested.
 3. Real KDE/X11 smoke testing, key-repeat semantics, and broader keymap/device validation — pending.
-4. Desktop suggestion UI with explicit lifecycle and privacy behavior — pending design/implementation.
+4. Desktop suggestion UI with explicit lifecycle and privacy behavior — notification-based version implemented; tray/menu UI pending.
 5. Wayland IBus integration, then Fcitx5 compatibility — planned.
-6. Build and test Linux release formats, then add them to a tag release workflow — planned.
+6. Build and test Linux release formats, then add them to a tag release workflow — implemented (v0.1.0); install testing on real distributions pending.
