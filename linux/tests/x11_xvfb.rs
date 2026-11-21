@@ -315,6 +315,64 @@ fn x11_session_api_polls_root_propagated_focus_transitions() {
 }
 
 #[test]
+fn x11_session_api_sees_keys_while_a_client_window_has_focus() {
+    let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    use typefix_core::x11::{X11SessionConnection, X11SessionEvent};
+    use x11rb::protocol::xproto::EventMask as CoreEventMask;
+
+    let layout = Command::new("setxkbmap")
+        .args(["-layout", "us,ir"])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(layout.success(), "could not set deterministic XKB layout");
+
+    let session = X11SessionConnection::connect().expect("connect X11 session API");
+    session.subscribe_session_events().expect("subscribe to session events");
+
+    // A real application selects key events on its own window and receives
+    // them first, so they are not propagated to the root window. The session
+    // API must still observe them (regression: nothing was detected on a real
+    // desktop because only focus-propagated events were selected).
+    let (client, screen) = x11rb::connect(None).expect("connect second X11 client");
+    let root = client.setup().roots[screen].root;
+    let app_window = client.generate_id().unwrap();
+    client.create_window(
+        0,
+        app_window,
+        root,
+        0,
+        0,
+        100,
+        60,
+        0,
+        WindowClass::INPUT_OUTPUT,
+        0,
+        &CreateWindowAux::new().event_mask(CoreEventMask::KEY_PRESS | CoreEventMask::KEY_RELEASE),
+    ).unwrap().check().unwrap();
+    client.map_window(app_window).unwrap().check().unwrap();
+    client.set_input_focus(InputFocus::PARENT, app_window, x11rb::CURRENT_TIME).unwrap().check().unwrap();
+    client.flush().unwrap();
+
+    run_xdotool(&["key", "a"]);
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut observed_key_press = false;
+    while Instant::now() < deadline && !observed_key_press {
+        if let Some(event) = session.poll_for_session_event().expect("poll key event") {
+            if let X11SessionEvent::Key(key) = event {
+                observed_key_press = key.pressed && key.keycode == 38 && key.effective_group == 0;
+            }
+        } else {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    client.destroy_window(app_window).unwrap().check().unwrap();
+    client.flush().unwrap();
+    assert!(observed_key_press, "session API did not see a key press delivered to a focused client window");
+}
+
+#[test]
 fn xkb_map_notifications_allow_keymap_refresh() {
     let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     use typefix_core::x11::{X11SessionConnection, X11SessionEvent};

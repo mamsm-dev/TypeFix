@@ -397,9 +397,22 @@ impl X11SessionConnection {
     /// issuing separate key-only and focus-only selections can replace the
     /// previous mask, so this combined method is the safe option for a session.
     pub fn subscribe_session_events(&self) -> Result<(), String> {
+        // Raw key events are delivered regardless of which window has focus.
+        // Non-raw XI2 key events selected on the root window are only delivered
+        // when no client window under the pointer/focus selects them, which on
+        // a real desktop means almost never. Raw events carry no modifier or
+        // group data, so the XKB state is queried for each key press instead.
+        let version = self.connection
+            .xkb_use_extension(1, 0)
+            .map_err(|e| format!("XKB extension request failed: {e}"))?
+            .reply()
+            .map_err(|e| format!("XKB extension negotiation failed: {e}"))?;
+        if !version.supported {
+            return Err("XKB extension 1.0 or newer is required".into());
+        }
         let root = self.connection.setup().roots[self.screen_number].root;
-        let mask = XIEventMask::KEY_PRESS
-            | XIEventMask::KEY_RELEASE
+        let mask = XIEventMask::RAW_KEY_PRESS
+            | XIEventMask::RAW_KEY_RELEASE
             | XIEventMask::FOCUS_IN
             | XIEventMask::FOCUS_OUT;
         self.connection
@@ -555,6 +568,40 @@ impl X11SessionConnection {
         Ok(())
     }
 
+    /// Builds a session key event from an XI2 raw key event. Raw events have no
+    /// modifier/group snapshot, so for key presses the current effective XKB
+    /// state is queried from the server. Releases are ignored by the session
+    /// and need no state.
+    fn session_key_from_raw(
+        &self,
+        detail: u32,
+        device_id: u16,
+        timestamp: u32,
+        pressed: bool,
+    ) -> Result<X11SessionEvent, String> {
+        let keycode = u8::try_from(detail)
+            .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
+        let (effective_modifiers, effective_group) = if pressed {
+            let state = self.connection
+                .xkb_get_state(x11_xkb::ID::USE_CORE_KBD.into())
+                .map_err(|e| format!("could not query XKB state: {e}"))?
+                .reply()
+                .map_err(|e| format!("XKB state query failed: {e}"))?;
+            (u32::from(u16::from(state.mods)), u8::from(state.group))
+        } else {
+            (0, 0)
+        };
+        Ok(X11SessionEvent::Key(X11KeyEvent {
+            keycode,
+            device_id,
+            source_id: device_id,
+            timestamp,
+            pressed,
+            effective_modifiers,
+            effective_group,
+        }))
+    }
+
     /// Polls one event from the opt-in X11 session stream without blocking.
     ///
     /// Returns `None` when no subscribed key/focus event is currently queued.
@@ -565,6 +612,12 @@ impl X11SessionConnection {
                 return Ok(None);
             };
             let decoded = match event {
+                Event::XinputRawKeyPress(event) => {
+                    Some(self.session_key_from_raw(event.detail, event.deviceid, event.time, true)?)
+                }
+                Event::XinputRawKeyRelease(event) => {
+                    Some(self.session_key_from_raw(event.detail, event.deviceid, event.time, false)?)
+                }
                 Event::XinputKeyPress(event) => {
                     let keycode = u8::try_from(event.detail)
                         .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
