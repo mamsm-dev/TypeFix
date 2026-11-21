@@ -45,13 +45,13 @@ Download a package from the [latest release](https://github.com/mamsm-dev/TypeFi
 
 ```bash
 # Debian / Ubuntu
-sudo apt install ./typefix_0.1.0-1_amd64.deb
+sudo apt install ./typefix_0.1.1-1_amd64.deb
 # Fedora / openSUSE
-sudo dnf install ./typefix-0.1.0-1.x86_64.rpm
+sudo dnf install ./typefix-0.1.1-1.x86_64.rpm
 # Arch Linux
-sudo pacman -U typefix-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U typefix-0.1.1-1-x86_64.pkg.tar.zst
 # AppImage (any distribution)
-chmod +x typefix-0.1.0-x86_64.AppImage && ./typefix-0.1.0-x86_64.AppImage
+chmod +x typefix-0.1.1-x86_64.AppImage && ./typefix-0.1.1-x86_64.AppImage
 ```
 
 The release also contains a `typefix-debug` Arch package with debug symbols; you do not need it.

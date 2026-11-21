@@ -11,7 +11,7 @@ The X11 connection exposes explicit observation APIs:
 - `subscribe_raw_key_events()` / `wait_for_raw_key_event()`: raw keycode and event metadata only.
 - `subscribe_key_events()` / `wait_for_key_event()`: key events with server-supplied effective modifier and active-group snapshots, plus master/source device IDs and timestamps.
 - `subscribe_focus_events()`: focus-in/focus-out metadata.
-- `subscribe_session_events()` with `poll_for_session_event()` or `wait_for_session_event()`: combined key and focus stream. Prefer this combined subscription because XI2 selections are per device/window.
+- `subscribe_session_events()` with `poll_for_session_event()` or `wait_for_session_event()`: combined key and focus stream. Keys are observed through XI2 raw key events, which are delivered whatever window has focus (non-raw root selections are not delivered while a client window selecting key events has focus); the effective modifier/group state is queried from XKB for each key press. Prefer this combined subscription because XI2 selections are per device/window.
 - `subscribe_xkb_map_events()`: XKB map/new-keyboard notifications. On change, session state is reset and `refresh_keymap()` rebuilds the keymap translator from the current XKB RMLVO settings.
 
 `XkbKeymap::session_event_for_key()` translates a key press using its event-time modifier/group snapshot and maps the result to a session event (text/Compose, Space, Backspace, Tab, navigation, or shortcut). Key releases do not produce text.

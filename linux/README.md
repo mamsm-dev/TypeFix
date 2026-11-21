@@ -62,7 +62,7 @@ Pushing a tag such as `v0.1.0` (it must match the version in `Cargo.toml`) runs 
 - Arch `.pkg.tar.zst` (makepkg in an Arch container, from `packaging/arch/PKGBUILD`; a `typefix-debug` package is produced as well)
 - `SHA256SUMS`
 
-The v0.1.0 release was built by this workflow and published successfully. The packages have not yet been installed and run on real systems, and AppImage/rpm/deb/Arch are x86_64 only.
+The v0.1.0 release was built by this workflow and published successfully. v0.1.0 did not detect anything on a real desktop (keys were only observed when no application window had focus); this is fixed in v0.1.1. The packages have not yet been installed and run on real systems, and AppImage/rpm/deb/Arch are x86_64 only.
 
 ## Milestones
 
