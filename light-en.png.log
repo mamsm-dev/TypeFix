@@ -1,0 +1,2 @@
+
+(typefix-gui:5797): dbind-WARNING **: 19:58:00.359: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
