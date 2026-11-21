@@ -459,7 +459,7 @@ impl State {
                 }
                 state.save();
                 state.render_later();
-                gtk::Inhibit(false)
+                glib::Propagation::Proceed
             });
         }
         suggest_row.pack_end(&switch, false, false, 0);
@@ -559,9 +559,9 @@ impl State {
     }
 
     /// Handles a key press while the shortcut recorder is active.
-    fn handle_key(self: &Rc<Self>, event: &gdk::EventKey) -> gtk::Inhibit {
+    fn handle_key(self: &Rc<Self>, event: &gdk::EventKey) -> glib::Propagation {
         if !self.recording.get() {
-            return gtk::Inhibit(false);
+            return glib::Propagation::Proceed;
         }
         let t = text(self.persian());
         match capture(event) {
@@ -584,7 +584,7 @@ impl State {
                 self.render_later();
             }
         }
-        gtk::Inhibit(true)
+        glib::Propagation::Stop
     }
 }
 
@@ -645,7 +645,7 @@ fn build(app: &gtk::Application) -> Rc<State> {
     // Closing the window hides it; TypeFix keeps running in the background.
     window.connect_delete_event(|window, _| {
         window.hide();
-        gtk::Inhibit(true)
+        glib::Propagation::Stop
     });
 
     state.render();
