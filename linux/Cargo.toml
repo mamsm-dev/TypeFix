@@ -26,8 +26,9 @@ name = "typefix-x11-events"
 path = "src/bin/x11_events.rs"
 
 [dependencies]
-x11rb = { version = "0.13", features = ["xinput", "xkb"] }
+x11rb = { version = "0.13", features = ["xinput", "xkb", "xtest"] }
 xkbcommon = "0.9"
+arboard = { version = "3", default-features = false }
 
 [dev-dependencies]
 x11rb = { version = "0.13", features = ["xtest"] }

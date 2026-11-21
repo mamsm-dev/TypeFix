@@ -130,7 +130,11 @@ pub fn suggest(dicts: &Dictionaries, map: &LayoutMap, typed: &str, language: Lan
 }
 
 pub mod compose;
+pub mod config;
+pub mod convert;
+pub mod hotkey;
 pub mod session;
+pub mod shortcut;
 pub mod x11;
 
 #[cfg(test)]
