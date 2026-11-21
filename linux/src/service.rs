@@ -140,6 +140,10 @@ fn locale() -> OsString {
 /// Handles one press of the conversion shortcut. The selected text is read
 /// from the PRIMARY selection, converted in memory, and pasted over the
 /// selection with Shift+Insert. The previous clipboard text is restored.
+///
+/// Only the CLIPBOARD is written. Taking over PRIMARY would make the
+/// application drop its own selection, and the paste would then insert the
+/// converted text next to the original instead of replacing it.
 fn convert_current_selection(
     listener: &HotkeyListener,
     clipboard: &mut Clipboard,
@@ -167,11 +171,6 @@ fn convert_current_selection(
         .clipboard(LinuxClipboardKind::Clipboard)
         .text()
         .ok();
-    clipboard
-        .set()
-        .clipboard(LinuxClipboardKind::Primary)
-        .text(converted.clone())
-        .map_err(|e| format!("could not set the selection: {e}"))?;
     clipboard
         .set()
         .clipboard(LinuxClipboardKind::Clipboard)

@@ -3,11 +3,14 @@
 //! Lets the user record the conversion shortcut, toggle typing suggestions and
 //! pick theme (system/light/dark) and UI language (English/Persian). Closing the
 //! window keeps TypeFix running in the background; starting TypeFix again shows
-//! the window. Settings are stored in ~/.config/typefix/config, shared with the
+//! the window, and a tray icon (StatusNotifierItem) offers "Open" and "Quit".
+//! Settings are stored in ~/.config/typefix/config, shared with the
 //! command-line `typefix`. Selected and typed text is kept in memory only.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::mpsc;
+use std::time::Duration;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -259,6 +262,101 @@ fn button(content: &str, class: &str) -> gtk::Button {
     button
 }
 
+enum TrayCommand {
+    Show,
+    Quit,
+}
+
+/// System tray icon. It runs on its own thread and talks to the GTK main
+/// thread through a channel (polled by a timer).
+struct TypeFixTray {
+    persian: bool,
+    icon: Vec<ksni::Icon>,
+    tx: mpsc::Sender<TrayCommand>,
+}
+
+impl ksni::Tray for TypeFixTray {
+    fn id(&self) -> String {
+        "typefix".into()
+    }
+
+    fn title(&self) -> String {
+        "TypeFix".into()
+    }
+
+    // The icon is sent as pixels so it also shows when the icon theme does not
+    // contain the TypeFix icon (for example when run as an AppImage).
+    fn icon_name(&self) -> String {
+        String::new()
+    }
+
+    fn icon_pixmap(&self) -> Vec<ksni::Icon> {
+        self.icon.clone()
+    }
+
+    fn activate(&mut self, _x: i32, _y: i32) {
+        let _ = self.tx.send(TrayCommand::Show);
+    }
+
+    fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
+        use ksni::menu::StandardItem;
+        let (open, quit) = if self.persian {
+            ("باز کردن TypeFix", "خروج")
+        } else {
+            ("Open TypeFix", "Quit")
+        };
+        vec![
+            StandardItem {
+                label: open.into(),
+                activate: Box::new(|tray: &mut Self| {
+                    let _ = tray.tx.send(TrayCommand::Show);
+                }),
+                ..Default::default()
+            }
+            .into(),
+            ksni::MenuItem::Separator,
+            StandardItem {
+                label: quit.into(),
+                activate: Box::new(|tray: &mut Self| {
+                    let _ = tray.tx.send(TrayCommand::Quit);
+                }),
+                ..Default::default()
+            }
+            .into(),
+        ]
+    }
+}
+
+/// Converts the embedded icon to the ARGB32 pixmaps used by StatusNotifierItem.
+fn tray_icons() -> Vec<ksni::Icon> {
+    let mut icons = Vec::new();
+    for size in [24, 32, 48, 64] {
+        let Some(pixbuf) = icon_pixbuf(size) else { continue };
+        let pixbuf = if pixbuf.has_alpha() {
+            pixbuf
+        } else {
+            match pixbuf.add_alpha(false, 0, 0, 0) {
+                Some(with_alpha) => with_alpha,
+                None => continue,
+            }
+        };
+        let (width, height) = (pixbuf.width() as usize, pixbuf.height() as usize);
+        let stride = pixbuf.rowstride() as usize;
+        let channels = pixbuf.n_channels() as usize;
+        let bytes = pixbuf.read_pixel_bytes();
+        let mut data = Vec::with_capacity(width * height * 4);
+        for y in 0..height {
+            for x in 0..width {
+                let offset = y * stride + x * channels;
+                let (r, g, b, a) = (bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+                data.extend_from_slice(&[a, r, g, b]);
+            }
+        }
+        icons.push(ksni::Icon { width: width as i32, height: height as i32, data });
+    }
+    icons
+}
+
 struct State {
     app: gtk::Application,
     window: gtk::ApplicationWindow,
@@ -268,6 +366,7 @@ struct State {
     recording: Cell<bool>,
     /// A message to show instead of the "active" status.
     problem: RefCell<Option<String>>,
+    tray: RefCell<Option<ksni::Handle<TypeFixTray>>>,
 }
 
 impl State {
@@ -532,6 +631,10 @@ impl State {
                     }
                     state.config.borrow_mut().language = Some(id.to_string());
                     state.save();
+                    let persian = id.as_str() == "fa";
+                    if let Some(tray) = state.tray.borrow().as_ref() {
+                        tray.update(|tray: &mut TypeFixTray| tray.persian = persian);
+                    }
                     state.render_later();
                 }
             });
@@ -625,6 +728,7 @@ fn build(app: &gtk::Application) -> Rc<State> {
         service: RefCell::new(Service::new()),
         recording: Cell::new(false),
         problem: RefCell::new(problem),
+        tray: RefCell::new(None),
     });
 
     // Start the background workers with the saved settings.
@@ -648,6 +752,31 @@ fn build(app: &gtk::Application) -> Rc<State> {
         window.hide();
         glib::Propagation::Stop
     });
+
+    // Tray icon: left click or "Open" shows the window, "Quit" stops TypeFix.
+    let (tx, rx) = mpsc::channel::<TrayCommand>();
+    let tray_service = ksni::TrayService::new(TypeFixTray {
+        persian: state.persian(),
+        icon: tray_icons(),
+        tx,
+    });
+    *state.tray.borrow_mut() = Some(tray_service.handle());
+    tray_service.spawn();
+    {
+        let state = Rc::clone(&state);
+        glib::timeout_add_local(Duration::from_millis(150), move || {
+            while let Ok(command) = rx.try_recv() {
+                match command {
+                    TrayCommand::Show => state.window.present(),
+                    TrayCommand::Quit => {
+                        state.service.borrow_mut().stop();
+                        state.app.quit();
+                    }
+                }
+            }
+            glib::ControlFlow::Continue
+        });
+    }
 
     state.render();
     state

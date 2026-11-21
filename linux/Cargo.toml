@@ -1,6 +1,6 @@
 [package]
 name = "typefix-linux-core"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 description = "Shared English/Persian keyboard-layout mistake detection core"
@@ -35,10 +35,12 @@ x11rb = { version = "0.13", features = ["xinput", "xkb", "xtest"] }
 xkbcommon = "0.9"
 arboard = { version = "3", default-features = false }
 gtk = { version = "0.18", optional = true }
+ksni = { version = "0.2", optional = true }
 
 [features]
-# The settings window needs the GTK 3 development files (libgtk-3-dev).
-gui = ["dep:gtk"]
+# The settings window needs the GTK 3 and D-Bus development files
+# (libgtk-3-dev, libdbus-1-dev); the tray icon uses ksni (D-Bus).
+gui = ["dep:gtk", "dep:ksni"]
 
 [dev-dependencies]
 x11rb = { version = "0.13", features = ["xtest"] }
@@ -97,3 +99,4 @@ assets = [
 libxkbcommon = "*"
 setxkbmap = "*"
 gtk3 = "*"
+dbus-libs = "*"
