@@ -51,7 +51,7 @@ sudo dnf install ./typefix-0.2.0-1.x86_64.rpm
 # Arch Linux
 sudo pacman -U typefix-0.2.0-1-x86_64.pkg.tar.zst
 # AppImage (any distribution)
-chmod +x typefix-0.2.0-x86_64.AppImage && ./typefix-0.1.1-x86_64.AppImage
+chmod +x typefix-0.2.0-x86_64.AppImage && ./typefix-0.2.0-x86_64.AppImage
 ```
 
 The release also contains a `typefix-debug` Arch package with debug symbols; you do not need it.
