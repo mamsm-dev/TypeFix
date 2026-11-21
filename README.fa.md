@@ -45,13 +45,13 @@ TypeFix ابزاری برای تشخیص اشتباه‌بودن چیدمان ص
 
 ```bash
 # Debian / Ubuntu
-sudo apt install ./typefix_0.1.1-1_amd64.deb
+sudo apt install ./typefix_0.2.0-1_amd64.deb
 # Fedora / openSUSE
-sudo dnf install ./typefix-0.1.1-1.x86_64.rpm
+sudo dnf install ./typefix-0.2.0-1.x86_64.rpm
 # Arch Linux
-sudo pacman -U typefix-0.1.1-1-x86_64.pkg.tar.zst
+sudo pacman -U typefix-0.2.0-1-x86_64.pkg.tar.zst
 # AppImage (هر توزیع)
-chmod +x typefix-0.1.1-x86_64.AppImage && ./typefix-0.1.1-x86_64.AppImage
+chmod +x typefix-0.2.0-x86_64.AppImage && ./typefix-0.1.1-x86_64.AppImage
 ```
 
 در ریلیز یک بستهٔ `typefix-debug` برای Arch هم هست که نمادهای اشکال‌زدایی دارد و نیازی به نصبش نیست.
