@@ -207,7 +207,7 @@ fn capture(event: &gdk::EventKey) -> Captured {
                 0,
             )
         })
-        .and_then(|(key, _, _, _)| key.name())
+        .and_then(|(key, _, _, _)| gdk::keys::Key::from(key).name())
         .map(|n| n.to_string())
         .unwrap_or_else(|| keyval.to_lower().name().map(|n| n.to_string()).unwrap_or(name));
 
@@ -459,7 +459,7 @@ impl State {
                 }
                 state.save();
                 state.render_later();
-                glib::signal::Inhibit(false)
+                gtk::Inhibit(false)
             });
         }
         suggest_row.pack_end(&switch, false, false, 0);
@@ -559,9 +559,9 @@ impl State {
     }
 
     /// Handles a key press while the shortcut recorder is active.
-    fn handle_key(self: &Rc<Self>, event: &gdk::EventKey) -> glib::signal::Inhibit {
+    fn handle_key(self: &Rc<Self>, event: &gdk::EventKey) -> gtk::Inhibit {
         if !self.recording.get() {
-            return glib::signal::Inhibit(false);
+            return gtk::Inhibit(false);
         }
         let t = text(self.persian());
         match capture(event) {
@@ -584,7 +584,7 @@ impl State {
                 self.render_later();
             }
         }
-        glib::signal::Inhibit(true)
+        gtk::Inhibit(true)
     }
 }
 
@@ -645,7 +645,7 @@ fn build(app: &gtk::Application) -> Rc<State> {
     // Closing the window hides it; TypeFix keeps running in the background.
     window.connect_delete_event(|window, _| {
         window.hide();
-        glib::signal::Inhibit(true)
+        gtk::Inhibit(true)
     });
 
     state.render();
