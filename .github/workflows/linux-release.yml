@@ -8,6 +8,12 @@ on:
   push:
     tags:
       - "v*"
+    # Feature branches only build the packages (no release is published).
+    branches:
+      - "feature/**"
+    paths:
+      - "linux/**"
+      - ".github/workflows/linux-release.yml"
   workflow_dispatch:
 
 permissions:
