@@ -37,6 +37,7 @@ arboard = { version = "3", default-features = false, features = ["wayland-data-c
 ashpd = { version = "=0.10.2", default-features = false, features = ["async-std"], optional = true }
 async-io = { version = "2", optional = true }
 futures-lite = { version = "2", optional = true }
+futures-util = { version = "0.3", default-features = false, features = ["io"], optional = true }
 gtk = { version = "0.18", optional = true }
 ksni = { version = "0.2", optional = true }
 
@@ -45,7 +46,7 @@ ksni = { version = "0.2", optional = true }
 # (libgtk-3-dev, libdbus-1-dev); the tray icon uses ksni (D-Bus).
 gui = ["dep:gtk", "dep:ksni"]
 # Wayland: XDG GlobalShortcuts + RemoteDesktop portals (pure Rust, D-Bus).
-wayland = ["dep:ashpd", "dep:async-io", "dep:futures-lite"]
+wayland = ["dep:ashpd", "dep:async-io", "dep:futures-lite", "dep:futures-util"]
 
 [dev-dependencies]
 x11rb = { version = "0.13", features = ["xtest"] }
