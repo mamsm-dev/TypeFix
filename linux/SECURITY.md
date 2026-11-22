@@ -16,7 +16,7 @@ The session loop (`--suggest`) does not inject or replace text. The current impl
 
 ## Wayland
 
-The planned Wayland implementation is an input-method integration (IBus first, Fcitx5 later), not raw device monitoring. Input methods receive text as part of text entry, but applications may bypass or incompletely support the input-method path. Secure-input behavior must follow the capabilities exposed by the active input method; unsupported contexts must fail closed rather than claim universal password detection.
+On Wayland only the conversion shortcut exists. It uses the XDG GlobalShortcuts portal and the RemoteDesktop portal restricted to the keyboard device; the desktop asks for permission, and the grant is remembered with a restore token stored in `~/.config/typefix/remote-desktop-token`. Injected keys are only Shift+Insert. The selected text is read through the compositor's data-control clipboard protocol, converted in memory and never stored; the previous clipboard text is restored. Typing is never observed on Wayland. A future input-method integration (IBus first, Fcitx5 later) would be needed for suggestions, not raw device monitoring. Input methods receive text as part of text entry, but applications may bypass or incompletely support the input-method path. Secure-input behavior must follow the capabilities exposed by the active input method; unsupported contexts must fail closed rather than claim universal password detection.
 
 ## Explicit non-goals
 

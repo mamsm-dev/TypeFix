@@ -2,7 +2,7 @@
 
 TypeFix detects likely English ⇄ Persian keyboard-layout mistakes on Linux and suggests the correctly converted text.
 
-> **Development status:** TypeFix has a settings window (`typefix-gui`, GTK 3, light/dark theme with the #18B0B0 accent, English/Persian interface) and a command-line app (`typefix`). Select text and press a configurable shortcut to convert it between the English and Persian keyboard layouts. It is **not yet a complete desktop application** (no Wayland support) and has had only limited testing on a real desktop.
+> **Development status:** TypeFix has a settings window (`typefix-gui`, GTK 3, light/dark theme with the #18B0B0 accent, English/Persian interface) and a command-line app (`typefix`). Select text and press a configurable shortcut to convert it between the English and Persian keyboard layouts. It is **not yet a complete desktop application** and has had only limited testing on a real desktop. Wayland support (KDE Plasma, shortcut conversion only) is new and untested on real hardware.
 
 ## Implemented
 
@@ -29,7 +29,8 @@ TypeFix detects likely English ⇄ Persian keyboard-layout mistakes on Linux and
 | Settings window (shortcut, suggestions, theme, language) | Implemented (GTK 3); layout checked with screenshots under Xvfb |
 | Convert selected text with a configurable shortcut | Implemented; paste via Shift+Insert has only limited testing across applications |
 | Tray icon (open window / quit) | Implemented; not yet tested on a real desktop |
-| Wayland / IBus | Planned |
+| Wayland (KDE Plasma, via XDG portals) | Experimental: conversion shortcut only |
+| IBus / Fcitx5 | Planned |
 | Fcitx5 | Planned |
 | Linux packages (AppImage, deb, rpm, Arch) | Built and published by CI from version tags; the AppImage with the settings window is untested on real systems |
 
@@ -37,7 +38,7 @@ See [linux/README.md](linux/README.md), [linux/SESSION.md](linux/SESSION.md), an
 
 ## Desktop and backend direction
 
-The initial desktop target is KDE Plasma on X11, followed by GNOME and XFCE. Wayland support is planned through an input-method integration (IBus first, then Fcitx5).
+The initial desktop target is KDE Plasma on X11, followed by GNOME and XFCE. The Wayland conversion shortcut uses the XDG desktop portals; an input-method integration (IBus, then Fcitx5) remains planned for typing suggestions.
 
 X11 event observation is server-wide: it does not provide strong per-application isolation or reliable password-field detection. The session loop is foreground-only and must be started explicitly by the user. No privileged service, raw `/dev/input` access, uinput, or global input grab is used.
 
@@ -72,7 +73,7 @@ Settings are saved in `~/.config/typefix/config`, shared with the command-line `
 
 ### Command line
 
-Requirements: an X11 session (Wayland-only sessions are not supported yet), the `setxkbmap` tool, and both a US/English layout and a Persian (`ir`) layout configured in your keyboard settings. `notify-send` (`libnotify`) is recommended; without it suggestions are printed to the terminal.
+Requirements: an X11 session (needs the `setxkbmap` tool) or a Wayland session on KDE Plasma (shortcut conversion only; KDE asks permission for the shortcut and for keyboard input the first time, and you can change the shortcut in System Settings → Shortcuts). On X11 you also need and both a US/English layout and a Persian (`ir`) layout configured in your keyboard settings. `notify-send` (`libnotify`) is recommended; without it suggestions are printed to the terminal.
 
 ```bash
 typefix                                # shortcut mode, default Ctrl+Alt+Space
@@ -149,7 +150,7 @@ The diagnostic prints key metadata, not typed text. Stop it with Ctrl+C. It obse
 - Session state is reset on focus changes, navigation, shortcuts, cancellation, and relevant lifecycle events.
 - X11 cannot reliably identify password fields or isolate one application from others on the same server. Disable X11 observation if that boundary is unacceptable.
 - When a suggestion is shown, the original and converted words are passed to `notify-send` and therefore to your desktop's notification service, which may keep them in its notification history. TypeFix itself does not store them.
-- A tray UI is not implemented. Wayland is not supported.
+- Wayland: only the conversion shortcut works (no typing suggestions), and it has not been tested on real KDE hardware yet.
 
 ## Project layout
 

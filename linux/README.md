@@ -20,7 +20,7 @@ X11 event visibility is server-wide. It offers neither strong per-application is
 
 ### Wayland
 
-Wayland does not provide ordinary desktop applications with a safe, compositor-independent global keyboard hook. The planned backend is an input-method integration, starting with IBus and followed by Fcitx5 compatibility—not raw evdev monitoring or uinput injection.
+Wayland has no global key grabs for ordinary applications, so the conversion shortcut uses the XDG desktop portals (tested target: KDE Plasma): `GlobalShortcuts` registers the shortcut (changeable in System Settings) and `RemoteDesktop` (keyboard only) pastes the result with Shift+Insert. The selection is read from PRIMARY and the result placed on the clipboard through the data-control protocol. Typing suggestions are X11-only; an input-method backend (IBus, then Fcitx5) remains planned for them. Build with `--features wayland`; not yet tested on real KDE hardware.
 
 Input-method support depends on the active input method and on applications accepting its preedit/commit path. It cannot guarantee identical behavior in every application.
 
