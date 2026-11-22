@@ -3,6 +3,14 @@
 Each version's section is used as the GitHub release notes when its `v*` tag is pushed
 (the release workflow fails if the section is missing). Newest version first.
 
+## [0.5.2]
+
+### Changed
+- Wayland: `typefix` and `typefix-gui` now log each step of the shortcut (portal registration, activation, clipboard, paste) to the terminal to help diagnose desktops where the shortcut does nothing. The selected text itself is never logged.
+
+### فارسی
+- Wayland: برنامه مراحل میان‌بر (ثبت در پورتال، فعال‌شدن، کلیپ‌بورد، چسباندن) را در ترمینال گزارش می‌کند تا عیب‌یابی ساده‌تر شود. متن انتخاب‌شده هرگز ثبت نمی‌شود.
+
 ## [0.5.1]
 
 ### Fixed

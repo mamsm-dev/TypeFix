@@ -107,6 +107,7 @@ async fn worker(
         .map_err(|e| portal_error("cannot start the RemoteDesktop session", e))?
         .response()
         .map_err(|e| portal_error("keyboard access was denied (needed to paste the converted text)", e))?;
+    eprintln!("typefix: RemoteDesktop session started, devices: {:?}", started.devices());
     if let Some(token) = started.restore_token() {
         save_token(token);
     }
@@ -121,12 +122,13 @@ async fn worker(
     let trigger = shortcut.portal_trigger();
     let new_shortcut = NewShortcut::new(SHORTCUT_ID, "Convert the selected text between English and Persian layouts")
         .preferred_trigger(Some(trigger.as_str()));
-    shortcuts
+    let bound = shortcuts
         .bind_shortcuts(&shortcut_session, &[new_shortcut], None)
         .await
         .map_err(|e| portal_error("cannot register the shortcut", e))?
         .response()
         .map_err(|e| portal_error("the shortcut was not accepted", e))?;
+    eprintln!("typefix: portal accepted the shortcut (requested {trigger}): {bound:?}");
 
     let mut activated = Box::pin(
         shortcuts
@@ -155,6 +157,7 @@ async fn worker(
             }
             Some(Some(event)) => event,
         };
+        eprintln!("typefix: shortcut activated ({})", event.shortcut_id());
         if event.shortcut_id() != SHORTCUT_ID {
             continue;
         }
@@ -165,6 +168,7 @@ async fn worker(
 
         let result = match prepare_conversion(&mut clipboard, en_to_fa, fa_to_en) {
             Ok(Some(pending)) => {
+                eprintln!("typefix: converted text placed on the clipboard; sending Shift+Insert");
                 let mut pasted = Ok(());
                 for (code, state) in [
                     (KEY_LEFTSHIFT, KeyState::Pressed),
@@ -180,7 +184,10 @@ async fn worker(
                 finish_conversion(&mut clipboard, pending);
                 pasted
             }
-            Ok(None) => Ok(()),
+            Ok(None) => {
+                eprintln!("typefix: nothing selected or nothing to convert (PRIMARY selection empty?)");
+                Ok(())
+            }
             Err(error) => Err(error),
         };
         if let Err(error) = result {
