@@ -20,7 +20,7 @@ _srcdir() {
 build() {
   cd "$(_srcdir)/linux"
   export CARGO_TARGET_DIR=target
-  cargo build --release --features gui --bin typefix --bin typefix-gui
+  cargo build --release --features gui,wayland --bin typefix --bin typefix-gui
 }
 
 package() {
@@ -35,7 +35,7 @@ package() {
   done
   install -Dm644 "$root/Resources/en_50k.txt" "$pkgdir/usr/share/typefix/en_50k.txt"
   install -Dm644 "$root/Resources/fa_50k.txt" "$pkgdir/usr/share/typefix/fa_50k.txt"
-  install -Dm644 "$root/linux/packaging/typefix.desktop" "$pkgdir/usr/share/applications/typefix.desktop"
+  install -Dm644 "$root/linux/packaging/io.github.mamsmdev.TypeFix.desktop" "$pkgdir/usr/share/applications/io.github.mamsmdev.TypeFix.desktop"
   install -Dm644 "$root/icon/icon_1024.png" "$pkgdir/usr/share/icons/hicolor/1024x1024/apps/typefix.png"
   install -Dm644 "$root/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

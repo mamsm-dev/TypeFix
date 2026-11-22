@@ -1,6 +1,6 @@
 [package]
 name = "typefix-linux-core"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license = "MIT"
 description = "Shared English/Persian keyboard-layout mistake detection core"
@@ -33,7 +33,10 @@ path = "src/bin/x11_events.rs"
 [dependencies]
 x11rb = { version = "0.13", features = ["xinput", "xkb", "xtest"] }
 xkbcommon = "0.9"
-arboard = { version = "3", default-features = false }
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+ashpd = { version = "=0.10.2", optional = true }
+async-io = { version = "2", optional = true }
+futures-lite = { version = "2", optional = true }
 gtk = { version = "0.18", optional = true }
 ksni = { version = "0.2", optional = true }
 
@@ -41,6 +44,8 @@ ksni = { version = "0.2", optional = true }
 # The settings window needs the GTK 3 and D-Bus development files
 # (libgtk-3-dev, libdbus-1-dev); the tray icon uses ksni (D-Bus).
 gui = ["dep:gtk", "dep:ksni"]
+# Wayland: XDG GlobalShortcuts + RemoteDesktop portals (pure Rust, D-Bus).
+wayland = ["dep:ashpd", "dep:async-io", "dep:futures-lite"]
 
 [dev-dependencies]
 x11rb = { version = "0.13", features = ["xtest"] }
@@ -60,7 +65,7 @@ assets = [
     ["target/release/typefix-gui", "usr/bin/", "755"],
     ["../Resources/en_50k.txt", "usr/share/typefix/", "644"],
     ["../Resources/fa_50k.txt", "usr/share/typefix/", "644"],
-    ["packaging/typefix.desktop", "usr/share/applications/", "644"],
+    ["packaging/io.github.mamsmdev.TypeFix.desktop", "usr/share/applications/", "644"],
     ["../icon/icon_1024.png", "usr/share/icons/hicolor/1024x1024/apps/typefix.png", "644"],
     ["packaging/icons/typefix-16.png", "usr/share/icons/hicolor/16x16/apps/typefix.png", "644"],
     ["packaging/icons/typefix-32.png", "usr/share/icons/hicolor/32x32/apps/typefix.png", "644"],
@@ -83,7 +88,7 @@ assets = [
     { source = "target/release/typefix-gui", dest = "/usr/bin/typefix-gui", mode = "755" },
     { source = "../Resources/en_50k.txt", dest = "/usr/share/typefix/en_50k.txt", mode = "644" },
     { source = "../Resources/fa_50k.txt", dest = "/usr/share/typefix/fa_50k.txt", mode = "644" },
-    { source = "packaging/typefix.desktop", dest = "/usr/share/applications/typefix.desktop", mode = "644" },
+    { source = "packaging/io.github.mamsmdev.TypeFix.desktop", dest = "/usr/share/applications/io.github.mamsmdev.TypeFix.desktop", mode = "644" },
     { source = "../icon/icon_1024.png", dest = "/usr/share/icons/hicolor/1024x1024/apps/typefix.png", mode = "644" },
     { source = "packaging/icons/typefix-16.png", dest = "/usr/share/icons/hicolor/16x16/apps/typefix.png", mode = "644" },
     { source = "packaging/icons/typefix-32.png", dest = "/usr/share/icons/hicolor/32x32/apps/typefix.png", mode = "644" },

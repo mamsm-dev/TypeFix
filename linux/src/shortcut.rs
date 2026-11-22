@@ -57,6 +57,25 @@ impl Shortcut {
         Ok(shortcut)
     }
 
+    /// The trigger in the XDG GlobalShortcuts portal format, e.g. `CTRL+ALT+space`.
+    pub fn portal_trigger(&self) -> String {
+        let mut parts: Vec<&str> = Vec::new();
+        if self.control {
+            parts.push("CTRL");
+        }
+        if self.alt {
+            parts.push("ALT");
+        }
+        if self.shift {
+            parts.push("SHIFT");
+        }
+        if self.super_key {
+            parts.push("LOGO");
+        }
+        parts.push(&self.key);
+        parts.join("+")
+    }
+
     pub fn modifier_mask(&self) -> u16 {
         let mut mask = 0;
         if self.shift {

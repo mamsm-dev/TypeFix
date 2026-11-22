@@ -58,7 +58,7 @@ jobs:
 
       - name: Build release binary
         working-directory: linux
-        run: cargo build --release --features gui --bin typefix --bin typefix-gui
+        run: cargo build --release --features gui,wayland --bin typefix --bin typefix-gui
 
       - name: Build .deb
         working-directory: linux
@@ -88,7 +88,7 @@ jobs:
             --executable AppDir/usr/bin/typefix-gui \
             --executable AppDir/usr/bin/typefix \
             --plugin gtk \
-            --desktop-file ../linux/packaging/typefix.desktop \
+            --desktop-file ../linux/packaging/io.github.mamsmdev.TypeFix.desktop \
             --icon-file typefix.png \
             --output appimage
 

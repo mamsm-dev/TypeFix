@@ -3,6 +3,21 @@
 Each version's section is used as the GitHub release notes when its `v*` tag is pushed
 (the release workflow fails if the section is missing). Newest version first.
 
+## [0.5.0]
+
+### Added
+- Wayland support for the conversion shortcut (tested target: KDE Plasma). The shortcut is registered through the XDG GlobalShortcuts portal, so you can also change it in System Settings, and the converted text is pasted through the RemoteDesktop portal (keyboard only). The desktop asks for permission the first time.
+- The selection is read from PRIMARY and written to the clipboard through the Wayland data-control protocol.
+- Typing suggestions remain X11-only.
+
+### Changed
+- The desktop file is now `io.github.mamsmdev.TypeFix.desktop` so portals can identify the app.
+
+### فارسی
+- پشتیبانی از Wayland برای میان‌بر تبدیل (هدف آزمایش: KDE Plasma). میان‌بر از طریق پورتال GlobalShortcuts ثبت می‌شود و از تنظیمات سیستم هم قابل تغییر است؛ جای‌گذاری متن با پورتال RemoteDesktop (فقط صفحه‌کلید) انجام می‌شود. بار اول سیستم اجازه می‌پرسد.
+- پیشنهاد حین تایپ فقط روی X11 کار می‌کند.
+- نام فایل desktop به `io.github.mamsmdev.TypeFix.desktop` تغییر کرد.
+
 ## [0.4.0] - 2026-11-21
 
 ### Added

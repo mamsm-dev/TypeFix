@@ -137,6 +137,8 @@ pub mod service;
 pub mod session;
 pub mod shortcut;
 pub mod x11;
+#[cfg(feature = "wayland")]
+pub mod wayland;
 
 #[cfg(test)]
 mod tests {

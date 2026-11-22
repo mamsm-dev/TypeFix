@@ -22,7 +22,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const DEFAULT_SHORTCUT: &str = "Ctrl+Alt+Space";
 
 fn usage() {
-    eprintln!("TypeFix {VERSION} - English/Persian keyboard layout converter (X11)");
+    eprintln!("TypeFix {VERSION} - English/Persian keyboard layout converter (X11 and Wayland)");
     eprintln!();
     eprintln!("Usage: typefix [--shortcut KEYS] [--suggest] [--source en|fa] [--data-dir DIR]");
     eprintln!();
@@ -40,8 +40,10 @@ fn usage() {
     eprintln!("Select text in any application and press the shortcut: English-layout text is");
     eprintln!("replaced by its Persian-layout equivalent and vice versa. The converted text is");
     eprintln!("pasted with Shift+Insert, so the clipboard is briefly used. Runs in the");
-    eprintln!("foreground until Ctrl+C. Needs an X11 session, setxkbmap and both a US and an");
-    eprintln!("Iranian (ir) layout. notify-send is used for messages when available.");
+    eprintln!("foreground until Ctrl+C. X11 needs setxkbmap and both a US and an Iranian (ir)");
+    eprintln!("layout. On Wayland (KDE Plasma) the shortcut is registered through the desktop");
+    eprintln!("portal and the system may ask for permission the first time; --suggest is X11-only.");
+    eprintln!("notify-send is used for messages when available.");
 }
 
 fn run() -> Result<(), String> {
@@ -80,8 +82,13 @@ fn run() -> Result<(), String> {
         }
     }
 
-    if env::var_os("DISPLAY").is_none() {
-        return Err("no X11 display found (DISPLAY is not set). Wayland-only sessions are not supported yet".into());
+    let wayland = typefix_core::service::is_wayland_session();
+    if !wayland && env::var_os("DISPLAY").is_none() {
+        return Err("no graphical session found (neither DISPLAY nor WAYLAND_DISPLAY is set)".into());
+    }
+    if wayland && suggest {
+        eprintln!("typefix: typing suggestions are not available on Wayland; only the shortcut is enabled.");
+        suggest = false;
     }
 
     let shortcut = Shortcut::parse(&shortcut_text)?;

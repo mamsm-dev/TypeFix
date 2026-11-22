@@ -26,7 +26,7 @@ use crate::{
     hotkey::HotkeyListener,
     session::{ComposedTypingSession, SessionAction},
     shortcut::Shortcut,
-    x11::X11SessionConnection,
+    x11::{X11SessionConnection, XkbConfig, XkbKeymap},
     Dictionaries, Language, LayoutMap, Suggestion,
 };
 
@@ -37,7 +37,16 @@ pub fn build_layout_map(
     connection: &X11SessionConnection,
     source: Language,
 ) -> Result<LayoutMap, String> {
-    let layouts = &connection.config.layouts;
+    build_layout_map_from(&connection.keymap, &connection.config.layouts, source)
+}
+
+/// Same as [`build_layout_map`] but from any compiled keymap, so it also works
+/// without an X server (Wayland).
+pub fn build_layout_map_from(
+    keymap: &XkbKeymap,
+    layouts: &[String],
+    source: Language,
+) -> Result<LayoutMap, String> {
     let persian = layouts
         .iter()
         .position(|name| name == "ir")
@@ -57,8 +66,8 @@ pub fn build_layout_map(
     let mut seen = std::collections::HashSet::new();
     for modifiers in [0u32, 1u32] {
         for keycode in 8u8..=255u8 {
-            let from = connection.keymap.translate_keycode(keycode, from_group, modifiers);
-            let to = connection.keymap.translate_keycode(keycode, to_group, modifiers);
+            let from = keymap.translate_keycode(keycode, from_group, modifiers);
+            let to = keymap.translate_keycode(keycode, to_group, modifiers);
             let (Some(from), Some(to)) = (from, to) else { continue };
             let mut chars = from.chars();
             let (Some(ch), None) = (chars.next(), chars.next()) else { continue };
@@ -70,7 +79,38 @@ pub fn build_layout_map(
     Ok(map)
 }
 
+/// Layout tables for a Wayland session. The compositor does not expose its
+/// keymap to ordinary clients, so the standard `us` and `ir` layouts are
+/// compiled locally; the conversion only needs the key positions.
+fn wayland_layout_maps() -> Result<(LayoutMap, LayoutMap), String> {
+    let layouts = vec!["us".to_owned(), "ir".to_owned()];
+    let config = XkbConfig {
+        rules: String::new(),
+        model: String::new(),
+        layouts: layouts.clone(),
+        variants: vec![String::new(), String::new()],
+        options: String::new(),
+    };
+    let keymap = config.compile()?;
+    Ok((
+        build_layout_map_from(&keymap, &layouts, Language::English)?,
+        build_layout_map_from(&keymap, &layouts, Language::Persian)?,
+    ))
+}
+
+/// True when the current desktop session is Wayland.
+pub fn is_wayland_session() -> bool {
+    match env::var("XDG_SESSION_TYPE").ok().as_deref() {
+        Some("wayland") => true,
+        Some("x11") => false,
+        _ => env::var_os("WAYLAND_DISPLAY").is_some(),
+    }
+}
+
 fn layout_maps() -> Result<(LayoutMap, LayoutMap), String> {
+    if is_wayland_session() {
+        return wayland_layout_maps();
+    }
     let connection = X11SessionConnection::connect()?;
     Ok((
         build_layout_map(&connection, Language::English)?,
@@ -137,21 +177,22 @@ fn locale() -> OsString {
     OsString::from("en_US.UTF-8")
 }
 
-/// Handles one press of the conversion shortcut. The selected text is read
-/// from the PRIMARY selection, converted in memory, and pasted over the
-/// selection with Shift+Insert. The previous clipboard text is restored.
+/// State kept between copying the converted text and restoring the clipboard.
+pub(crate) struct PendingPaste {
+    previous: Option<String>,
+}
+
+/// Reads the selection (PRIMARY), converts it in memory and puts the result on
+/// the CLIPBOARD. Returns `None` (after notifying) when there is nothing to do.
 ///
 /// Only the CLIPBOARD is written. Taking over PRIMARY would make the
 /// application drop its own selection, and the paste would then insert the
 /// converted text next to the original instead of replacing it.
-fn convert_current_selection(
-    listener: &HotkeyListener,
+pub(crate) fn prepare_conversion(
     clipboard: &mut Clipboard,
     en_to_fa: &LayoutMap,
     fa_to_en: &LayoutMap,
-) -> Result<(), String> {
-    listener.wait_for_modifier_release();
-
+) -> Result<Option<PendingPaste>, String> {
     let selected = clipboard
         .get()
         .clipboard(LinuxClipboardKind::Primary)
@@ -159,11 +200,11 @@ fn convert_current_selection(
         .unwrap_or_default();
     if selected.is_empty() {
         notify("TypeFix", "No text is selected.");
-        return Ok(());
+        return Ok(None);
     }
     let Some(converted) = convert_selection(&selected, en_to_fa, fa_to_en) else {
         notify("TypeFix", "Nothing to convert in the selected text.");
-        return Ok(());
+        return Ok(None);
     };
 
     let previous = clipboard
@@ -176,17 +217,36 @@ fn convert_current_selection(
         .clipboard(LinuxClipboardKind::Clipboard)
         .text(converted)
         .map_err(|e| format!("could not set the clipboard: {e}"))?;
-
     thread::sleep(Duration::from_millis(60));
-    listener.send_paste()?;
-    thread::sleep(Duration::from_millis(400));
+    Ok(Some(PendingPaste { previous }))
+}
 
-    if let Some(previous) = previous {
+/// Waits for the application to read the pasted text, then restores the
+/// previous clipboard contents.
+pub(crate) fn finish_conversion(clipboard: &mut Clipboard, pending: PendingPaste) {
+    thread::sleep(Duration::from_millis(400));
+    if let Some(previous) = pending.previous {
         let _ = clipboard
             .set()
             .clipboard(LinuxClipboardKind::Clipboard)
             .text(previous);
     }
+}
+
+/// Handles one press of the conversion shortcut on X11: the converted text is
+/// pasted over the selection with Shift+Insert.
+fn convert_current_selection(
+    listener: &HotkeyListener,
+    clipboard: &mut Clipboard,
+    en_to_fa: &LayoutMap,
+    fa_to_en: &LayoutMap,
+) -> Result<(), String> {
+    listener.wait_for_modifier_release();
+    let Some(pending) = prepare_conversion(clipboard, en_to_fa, fa_to_en)? else {
+        return Ok(());
+    };
+    listener.send_paste()?;
+    finish_conversion(clipboard, pending);
     Ok(())
 }
 
@@ -227,7 +287,20 @@ impl Service {
         let thread_stop = Arc::clone(&stop);
         let shortcut = shortcut.clone();
 
+        let wayland = is_wayland_session();
         let handle = thread::spawn(move || {
+            if wayland {
+                #[cfg(feature = "wayland")]
+                crate::wayland::run_shortcut_worker(shortcut, thread_stop, ready_tx, en_to_fa, fa_to_en);
+                #[cfg(not(feature = "wayland"))]
+                {
+                    let _ = (shortcut, thread_stop, en_to_fa, fa_to_en);
+                    let _ = ready_tx.send(Err(
+                        "this build has no Wayland support (rebuild with --features wayland)".to_owned(),
+                    ));
+                }
+                return;
+            }
             let listener = match HotkeyListener::new(&shortcut) {
                 Ok(listener) => listener,
                 Err(error) => {
@@ -292,6 +365,9 @@ impl Service {
             return Ok(());
         }
 
+        if is_wayland_session() {
+            return Err("typing suggestions are not available on Wayland; only the conversion shortcut is".to_owned());
+        }
         let dir = find_data_dir(data_dir)
             .ok_or("cannot find en_50k.txt and fa_50k.txt; set TYPEFIX_DATA_DIR")?;
         let dicts = Dictionaries::load(dir.join("en_50k.txt"), dir.join("fa_50k.txt"))
