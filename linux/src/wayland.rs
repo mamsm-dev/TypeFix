@@ -40,7 +40,6 @@ use crate::{
 };
 
 const SHORTCUT_ID: &str = "convert-selection";
-const APP_ID: &str = "io.github.mamsmdev.TypeFix";
 /// Linux evdev key codes (the RemoteDesktop portal takes evdev codes).
 const KEY_LEFTSHIFT: i32 = 42;
 const KEY_INSERT: i32 = 110;
@@ -87,11 +86,6 @@ async fn worker(
     let mut clipboard = Clipboard::new().map_err(|e| {
         format!("cannot access the Wayland clipboard (the compositor must support the data-control protocol): {e}")
     })?;
-
-    // Lets the portal match this process to its .desktop file.
-    if let Ok(app_id) = ashpd::AppID::try_from(APP_ID) {
-        let _ = ashpd::register_host_app(app_id).await;
-    }
 
     let remote = RemoteDesktop::new()
         .await
