@@ -3,6 +3,14 @@
 Each version's section is used as the GitHub release notes when its `v*` tag is pushed
 (the release workflow fails if the section is missing). Newest version first.
 
+## [0.5.1]
+
+### Fixed
+- Wayland: the shortcut worker crashed at start-up with "there is no reactor running" because the portal library was built for Tokio. It now uses the async-std runtime. Internal errors are shown in the window instead of a generic message.
+
+### فارسی
+- Wayland: کارگر میان‌بر هنگام شروع با خطای «there is no reactor running» از کار می‌افتاد، چون کتابخانهٔ پورتال برای Tokio ساخته شده بود. اکنون از async-std استفاده می‌کند و خطاهای داخلی در پنجره نمایش داده می‌شوند.
+
 ## [0.5.0]
 
 ### Added

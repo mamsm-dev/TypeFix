@@ -1,6 +1,6 @@
 [package]
 name = "typefix-linux-core"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 license = "MIT"
 description = "Shared English/Persian keyboard-layout mistake detection core"
@@ -34,7 +34,7 @@ path = "src/bin/x11_events.rs"
 x11rb = { version = "0.13", features = ["xinput", "xkb", "xtest"] }
 xkbcommon = "0.9"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
-ashpd = { version = "=0.10.2", optional = true }
+ashpd = { version = "=0.10.2", default-features = false, features = ["async-std"], optional = true }
 async-io = { version = "2", optional = true }
 futures-lite = { version = "2", optional = true }
 gtk = { version = "0.18", optional = true }

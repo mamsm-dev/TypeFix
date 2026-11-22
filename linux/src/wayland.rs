@@ -203,7 +203,10 @@ pub fn run_shortcut_worker(
     fa_to_en: LayoutMap,
 ) {
     let mut ready = Some(ready);
-    let result = async_io::block_on(worker(&shortcut, &stop, &mut ready, &en_to_fa, &fa_to_en));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        async_io::block_on(worker(&shortcut, &stop, &mut ready, &en_to_fa, &fa_to_en))
+    }))
+    .unwrap_or_else(|_| Err("internal error in the Wayland portal worker (see the terminal output)".to_owned()));
     if let Err(error) = result {
         match ready.take() {
             Some(tx) => {
