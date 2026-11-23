@@ -193,11 +193,22 @@ pub(crate) fn prepare_conversion(
     en_to_fa: &LayoutMap,
     fa_to_en: &LayoutMap,
 ) -> Result<Option<PendingPaste>, String> {
-    let selected = clipboard
-        .get()
-        .clipboard(LinuxClipboardKind::Primary)
-        .text()
-        .unwrap_or_default();
+    // The selection can briefly be unavailable right after the keys are
+    // released, so retry a few times before giving up.
+    let mut selected = String::new();
+    for attempt in 0..4 {
+        selected = clipboard
+            .get()
+            .clipboard(LinuxClipboardKind::Primary)
+            .text()
+            .unwrap_or_default();
+        if !selected.is_empty() {
+            break;
+        }
+        if attempt < 3 {
+            thread::sleep(Duration::from_millis(80));
+        }
+    }
     if selected.is_empty() {
         notify("TypeFix", "No text is selected.");
         return Ok(None);
@@ -217,14 +228,14 @@ pub(crate) fn prepare_conversion(
         .clipboard(LinuxClipboardKind::Clipboard)
         .text(converted)
         .map_err(|e| format!("could not set the clipboard: {e}"))?;
-    thread::sleep(Duration::from_millis(60));
+    thread::sleep(Duration::from_millis(150));
     Ok(Some(PendingPaste { previous }))
 }
 
 /// Waits for the application to read the pasted text, then restores the
 /// previous clipboard contents.
 pub(crate) fn finish_conversion(clipboard: &mut Clipboard, pending: PendingPaste) {
-    thread::sleep(Duration::from_millis(400));
+    thread::sleep(Duration::from_millis(900));
     if let Some(previous) = pending.previous {
         let _ = clipboard
             .set()

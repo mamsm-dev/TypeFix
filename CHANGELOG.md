@@ -3,6 +3,14 @@
 Each version's section is used as the GitHub release notes when its `v*` tag is pushed
 (the release workflow fails if the section is missing). Newest version first.
 
+## [0.5.3]
+
+### Fixed
+- Wayland: the shortcut worked only some of the time. The shortcut's modifier keys are now released before the paste, the selection read is retried, and the delays before pasting and before restoring the clipboard are longer so slower applications get the text.
+
+### فارسی
+- Wayland: میان‌بر فقط گاهی کار می‌کرد. اکنون کلیدهای تغییردهندهٔ میان‌بر پیش از چسباندن رها می‌شوند، خواندن انتخاب چند بار تکرار می‌شود و مکث پیش از چسباندن و پیش از برگرداندن کلیپ‌بورد بیشتر است تا برنامه‌های کندتر هم متن را بگیرند.
+
 ## [0.5.2]
 
 ### Changed

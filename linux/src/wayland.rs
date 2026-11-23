@@ -44,6 +44,24 @@ const SHORTCUT_ID: &str = "convert-selection";
 const KEY_LEFTSHIFT: i32 = 42;
 const KEY_INSERT: i32 = 110;
 
+/// Evdev codes of the modifier keys used in the shortcut (left and right).
+fn modifier_codes(shortcut: &Shortcut) -> Vec<i32> {
+    let mut codes = Vec::new();
+    if shortcut.control {
+        codes.extend([29, 97]);
+    }
+    if shortcut.alt {
+        codes.extend([56, 100]);
+    }
+    if shortcut.shift {
+        codes.extend([42, 54]);
+    }
+    if shortcut.super_key {
+        codes.extend([125, 126]);
+    }
+    codes
+}
+
 fn token_path() -> Option<PathBuf> {
     config_path().map(|path| path.with_file_name("remote-desktop-token"))
 }
@@ -164,12 +182,18 @@ async fn worker(
         // Let the user release the keys first, otherwise the injected
         // Shift+Insert would combine with the still-held shortcut modifiers.
         let _ = next_within(&mut deactivated, Duration::from_secs(2)).await;
-        thread::sleep(Duration::from_millis(150));
+        thread::sleep(Duration::from_millis(250));
 
         let result = match prepare_conversion(&mut clipboard, en_to_fa, fa_to_en) {
             Ok(Some(pending)) => {
                 eprintln!("typefix: converted text placed on the clipboard; sending Shift+Insert");
                 let mut pasted = Ok(());
+                // The user may still hold the shortcut's modifiers; release them
+                // so the target sees a clean Shift+Insert.
+                for code in modifier_codes(shortcut) {
+                    let _ = remote.notify_keyboard_keycode(&remote_session, code, KeyState::Released).await;
+                }
+                thread::sleep(Duration::from_millis(40));
                 for (code, state) in [
                     (KEY_LEFTSHIFT, KeyState::Pressed),
                     (KEY_INSERT, KeyState::Pressed),
