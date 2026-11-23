@@ -1102,6 +1102,69 @@ mod tests {
     }
 
     #[test]
+    fn builds_shift_aware_layout_maps_in_both_english_persian_directions() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/Persian XKB keymap compiles");
+
+        let to_persian = keymap.layout_map(0, 1).expect("US to Persian groups are valid");
+        let to_english = keymap.layout_map(1, 0).expect("Persian to US groups are valid");
+        assert_eq!(to_persian.convert("sghl"), "سلام");
+        assert_eq!(to_english.convert("سلام"), "sghl");
+
+        let shifted_persian = keymap
+            .translate_keycode(39, 1, 1)
+            .expect("Persian Shift+S produces printable text");
+        assert_eq!(to_persian.convert("S"), shifted_persian);
+        assert_eq!(to_english.convert(&shifted_persian), "S");
+    }
+
+    #[test]
+    fn rejects_invalid_or_identical_layout_map_groups() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/Persian XKB keymap compiles");
+
+        assert!(keymap.layout_map(0, 2).is_err());
+        assert!(keymap.layout_map(2, 0).is_err());
+        assert!(keymap.layout_map(1, 1).is_err());
+    }
+
+    #[test]
+    fn builds_bidirectional_layout_maps_for_german_qwertz() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "de".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/German XKB keymap compiles");
+
+        let to_german = keymap.layout_map(0, 1).expect("US to German groups are valid");
+        let to_us = keymap.layout_map(1, 0).expect("German to US groups are valid");
+        assert_eq!(to_german.convert("yzYZ"), "zyZY");
+        assert_eq!(to_us.convert("zyZY"), "yzYZ");
+    }
+
+    #[test]
+    fn resolves_english_group_when_us_is_not_configured() {
+        let layouts = vec!["de".to_owned(), "ir".to_owned()];
+        assert_eq!(english_persian_groups(&layouts).unwrap(), (0, 1));
+        assert!(english_persian_groups(&["ir".to_owned()]).is_err());
+    }
+
+    #[test]
     fn verifies_physical_keys_for_english_persian_conversion_pair() {
         let config = XkbConfig {
             rules: "evdev".into(),
