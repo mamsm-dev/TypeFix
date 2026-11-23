@@ -22,6 +22,24 @@ use x11rb::{
 };
 use xkbcommon::xkb;
 
+/// Resolve the configured English and Persian XKB groups. The first explicit
+/// US group is preferred; otherwise the first non-Persian group is treated as
+/// the English-side layout, matching the existing application policy.
+pub fn english_persian_groups(layouts: &[String]) -> Result<(u32, u32), String> {
+    let persian = layouts
+        .iter()
+        .position(|name| name == "ir")
+        .ok_or_else(|| format!(
+            "no Persian (ir) keyboard layout is configured; reported XKB layouts: {layouts:?}"
+        ))?;
+    let english = layouts
+        .iter()
+        .position(|name| name == "us")
+        .or_else(|| layouts.iter().position(|name| name != "ir"))
+        .ok_or_else(|| "no English keyboard layout is configured".to_owned())?;
+    Ok((english as u32, persian as u32))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct XkbConfig {
     pub rules: String,
@@ -200,6 +218,60 @@ impl XkbKeymap {
         (!text.is_empty() && !text.chars().any(char::is_control)).then_some(text)
     }
 
+    /// Build a physical-key conversion map between two XKB layout groups.
+    ///
+    /// Both the unshifted and Shift levels are sampled. If a source character
+    /// is produced by more than one physical key/level, it is omitted rather
+    /// than mapped arbitrarily. This avoids silently corrupting ambiguous
+    /// layouts. The caller must choose the intended language groups.
+    pub fn layout_map(
+        &self,
+        source_group: u32,
+        target_group: u32,
+    ) -> Result<crate::LayoutMap, String> {
+        let group_count = self.layout_count();
+        if source_group >= group_count {
+            return Err(format!("source XKB group {source_group} is out of range ({group_count} groups)"));
+        }
+        if target_group >= group_count {
+            return Err(format!("target XKB group {target_group} is out of range ({group_count} groups)"));
+        }
+        if source_group == target_group {
+            return Err("source and target XKB groups must be different".into());
+        }
+
+        let mut candidates: std::collections::HashMap<char, Option<String>> =
+            std::collections::HashMap::new();
+        for keycode in 8u8..=255u8 {
+            for modifiers in [0u32, 1u32] {
+                let Some(source) = self.translate_keycode(keycode, source_group, modifiers) else {
+                    continue;
+                };
+                let mut chars = source.chars();
+                let Some(source_char) = chars.next() else { continue };
+                if chars.next().is_some() || source_char.is_whitespace() || source_char.is_control() {
+                    continue;
+                }
+                let Some(target) = self.translate_keycode(keycode, target_group, modifiers) else {
+                    continue;
+                };
+
+                candidates
+                    .entry(source_char)
+                    .and_modify(|candidate| *candidate = None)
+                    .or_insert(Some(target));
+            }
+        }
+
+        let mut map = crate::LayoutMap::default();
+        for (source, target) in candidates {
+            if let Some(target) = target {
+                map.insert(source, target);
+            }
+        }
+        Ok(map)
+    }
+
     pub fn layout_count(&self) -> u32 {
         self.keymap.num_layouts()
     }
@@ -315,6 +387,17 @@ impl X11SessionConnection {
             config,
             keymap,
         })
+    }
+
+    /// Build a conversion map from the currently compiled session keymap.
+    /// Rebuild this map after an XKB map/new-keyboard notification.
+    pub fn layout_map(&self, source: crate::Language) -> Result<crate::LayoutMap, String> {
+        let (english, persian) = english_persian_groups(&self.config.layouts)?;
+        let (from, to) = match source {
+            crate::Language::English => (english, persian),
+            crate::Language::Persian => (persian, english),
+        };
+        self.keymap.layout_map(from, to)
     }
 
     /// Explicitly enables global raw keycode observation for all master devices.
@@ -532,6 +615,27 @@ impl X11SessionConnection {
         }
     }
 
+    /// Dispatch one event and refresh the conversion map after an XKB map change.
+    ///
+    /// The plain handle_session_event method refreshes the XKB translator but
+    /// cannot update a caller-owned immutable map. The foreground loop uses
+    /// this method so both the translator and character map track one keymap.
+    pub fn handle_session_event_with_map_refresh(
+        &mut self,
+        session: &mut crate::session::ComposedTypingSession,
+        event: X11SessionEvent,
+        dicts: &crate::Dictionaries,
+        source: crate::Language,
+        map: &mut crate::LayoutMap,
+    ) -> Result<crate::session::SessionAction, String> {
+        let keymap_changed = matches!(&event, X11SessionEvent::KeymapChanged(_));
+        let action = self.handle_session_event(session, event, dicts, source, map)?;
+        if keymap_changed {
+            *map = self.layout_map(source)?;
+        }
+        Ok(action)
+    }
+
     /// Run an explicitly invoked foreground session loop.
     ///
     /// This enables the XI2 key/focus and XKB map subscriptions, dispatches
@@ -544,7 +648,6 @@ impl X11SessionConnection {
         session: &mut crate::session::ComposedTypingSession,
         dicts: &crate::Dictionaries,
         source: crate::Language,
-        map: &crate::LayoutMap,
         mut on_action: OnAction,
         mut should_stop: ShouldStop,
     ) -> Result<(), String>
@@ -554,10 +657,20 @@ impl X11SessionConnection {
     {
         self.subscribe_session_events()?;
         self.subscribe_xkb_map_events()?;
+        // Build from this connection's keymap, not from a map created on a
+        // different connection before the worker started. This closes the
+        // startup race where the user's layout changes between those steps.
+        let mut active_map = self.layout_map(source)?;
 
         while !should_stop() {
             if let Some(event) = self.poll_for_session_event()? {
-                let action = self.handle_session_event(session, event, dicts, source, map)?;
+                let action = self.handle_session_event_with_map_refresh(
+                    session,
+                    event,
+                    dicts,
+                    source,
+                    &mut active_map,
+                )?;
                 if !matches!(action, crate::session::SessionAction::None) {
                     on_action(action);
                 }
@@ -569,13 +682,16 @@ impl X11SessionConnection {
     }
 
     /// Builds a session key event from an XI2 raw key event. Raw events have no
-    /// modifier/group snapshot, so for key presses the current effective XKB
-    /// state is queried from the server. Releases are ignored by the session
-    /// and need no state.
+    /// modifier/group snapshot, so the current XKB state is queried for that
+    /// event's master keyboard. This is a post-event state query, not a
+    /// timestamped XI2 snapshot; rapid queued input can still race this query.
+    /// Keep device and source IDs distinct: the master owns effective XKB state,
+    /// while source_id identifies the physical/virtual slave that generated it.
     fn session_key_from_raw(
         &self,
         detail: u32,
         device_id: u16,
+        source_id: u16,
         timestamp: u32,
         pressed: bool,
     ) -> Result<X11SessionEvent, String> {
@@ -583,7 +699,7 @@ impl X11SessionConnection {
             .map_err(|_| "XI2 keycode is outside the XKB keycode range".to_owned())?;
         let (effective_modifiers, effective_group) = if pressed {
             let state = self.connection
-                .xkb_get_state(x11_xkb::ID::USE_CORE_KBD.into())
+                .xkb_get_state(device_id.into())
                 .map_err(|e| format!("could not query XKB state: {e}"))?
                 .reply()
                 .map_err(|e| format!("XKB state query failed: {e}"))?;
@@ -594,7 +710,7 @@ impl X11SessionConnection {
         Ok(X11SessionEvent::Key(X11KeyEvent {
             keycode,
             device_id,
-            source_id: device_id,
+            source_id,
             timestamp,
             pressed,
             effective_modifiers,
@@ -613,10 +729,22 @@ impl X11SessionConnection {
             };
             let decoded = match event {
                 Event::XinputRawKeyPress(event) => {
-                    Some(self.session_key_from_raw(event.detail, event.deviceid, event.time, true)?)
+                    Some(self.session_key_from_raw(
+                        event.detail,
+                        event.deviceid,
+                        event.sourceid,
+                        event.time,
+                        true,
+                    )?)
                 }
                 Event::XinputRawKeyRelease(event) => {
-                    Some(self.session_key_from_raw(event.detail, event.deviceid, event.time, false)?)
+                    Some(self.session_key_from_raw(
+                        event.detail,
+                        event.deviceid,
+                        event.sourceid,
+                        event.time,
+                        false,
+                    )?)
                 }
                 Event::XinputKeyPress(event) => {
                     let keycode = u8::try_from(event.detail)
@@ -975,6 +1103,69 @@ mod tests {
         // The active Persian group remains selected while the effective
         // modifier mask is passed through the same translation path.
         assert_eq!(keymap.translate_keycode(38, 1, 0).as_deref(), Some("ش"));
+    }
+
+    #[test]
+    fn builds_shift_aware_layout_maps_in_both_english_persian_directions() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/Persian XKB keymap compiles");
+
+        let to_persian = keymap.layout_map(0, 1).expect("US to Persian groups are valid");
+        let to_english = keymap.layout_map(1, 0).expect("Persian to US groups are valid");
+        assert_eq!(to_persian.convert("sghl"), "سلام");
+        assert_eq!(to_english.convert("سلام"), "sghl");
+
+        let shifted_persian = keymap
+            .translate_keycode(39, 1, 1)
+            .expect("Persian Shift+S produces printable text");
+        assert_eq!(to_persian.convert("S"), shifted_persian);
+        assert_eq!(to_english.convert(&shifted_persian), "S");
+    }
+
+    #[test]
+    fn rejects_invalid_or_identical_layout_map_groups() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "ir".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/Persian XKB keymap compiles");
+
+        assert!(keymap.layout_map(0, 2).is_err());
+        assert!(keymap.layout_map(2, 0).is_err());
+        assert!(keymap.layout_map(1, 1).is_err());
+    }
+
+    #[test]
+    fn builds_bidirectional_layout_maps_for_german_qwertz() {
+        let config = XkbConfig {
+            rules: "evdev".into(),
+            model: "pc105".into(),
+            layouts: vec!["us".into(), "de".into()],
+            variants: vec!["".into(), "".into()],
+            options: String::new(),
+        };
+        let keymap = config.compile().expect("US/German XKB keymap compiles");
+
+        let to_german = keymap.layout_map(0, 1).expect("US to German groups are valid");
+        let to_us = keymap.layout_map(1, 0).expect("German to US groups are valid");
+        assert_eq!(to_german.convert("yzYZ"), "zyZY");
+        assert_eq!(to_us.convert("zyZY"), "yzYZ");
+    }
+
+    #[test]
+    fn resolves_english_group_when_us_is_not_configured() {
+        let layouts = vec!["de".to_owned(), "ir".to_owned()];
+        assert_eq!(english_persian_groups(&layouts).unwrap(), (0, 1));
+        assert!(english_persian_groups(&["ir".to_owned()]).is_err());
     }
 
     #[test]

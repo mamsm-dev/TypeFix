@@ -37,7 +37,7 @@ pub fn build_layout_map(
     connection: &X11SessionConnection,
     source: Language,
 ) -> Result<LayoutMap, String> {
-    build_layout_map_from(&connection.keymap, &connection.config.layouts, source)
+    connection.layout_map(source)
 }
 
 /// Same as [`build_layout_map`] but from any compiled keymap, so it also works
@@ -47,36 +47,12 @@ pub fn build_layout_map_from(
     layouts: &[String],
     source: Language,
 ) -> Result<LayoutMap, String> {
-    let persian = layouts
-        .iter()
-        .position(|name| name == "ir")
-        .ok_or_else(|| "no Persian (ir) keyboard layout is configured; add one in your desktop keyboard settings".to_owned())?;
-    let english = layouts
-        .iter()
-        .position(|name| name == "us")
-        .or_else(|| layouts.iter().position(|name| name != "ir"))
-        .ok_or_else(|| "no English keyboard layout is configured".to_owned())?;
-
+    let (english, persian) = crate::x11::english_persian_groups(layouts)?;
     let (from_group, to_group) = match source {
-        Language::English => (english as u32, persian as u32),
-        Language::Persian => (persian as u32, english as u32),
+        Language::English => (english, persian),
+        Language::Persian => (persian, english),
     };
-
-    let mut map = LayoutMap::default();
-    let mut seen = std::collections::HashSet::new();
-    for modifiers in [0u32, 1u32] {
-        for keycode in 8u8..=255u8 {
-            let from = keymap.translate_keycode(keycode, from_group, modifiers);
-            let to = keymap.translate_keycode(keycode, to_group, modifiers);
-            let (Some(from), Some(to)) = (from, to) else { continue };
-            let mut chars = from.chars();
-            let (Some(ch), None) = (chars.next(), chars.next()) else { continue };
-            if seen.insert(ch) {
-                map.insert(ch, to);
-            }
-        }
-    }
-    Ok(map)
+    keymap.layout_map(from_group, to_group)
 }
 
 /// Layout tables for a Wayland session. The compositor does not expose its
@@ -138,9 +114,17 @@ pub fn notify(title: &str, body: &str) {
     }
 }
 
+const SUGGESTION_NOTIFICATION_BODY: &str =
+    "Possible English/Persian layout mismatch. Select the text and use your TypeFix shortcut to convert it.";
+
+fn suggestion_notification_body(_suggestion: &Suggestion) -> &'static str {
+    // Never pass the typed word or converted text to the desktop notification
+    // service; notification history is outside TypeFix's control.
+    SUGGESTION_NOTIFICATION_BODY
+}
+
 fn notify_suggestion(suggestion: &Suggestion) {
-    let body = format!("{}  \u{2192}  {}", suggestion.original, suggestion.converted);
-    notify("TypeFix", &body);
+    notify("TypeFix", suggestion_notification_body(suggestion));
 }
 
 /// Finds the directory holding `en_50k.txt` and `fa_50k.txt`.
@@ -383,11 +367,6 @@ impl Service {
             .ok_or("cannot find en_50k.txt and fa_50k.txt; set TYPEFIX_DATA_DIR")?;
         let dicts = Dictionaries::load(dir.join("en_50k.txt"), dir.join("fa_50k.txt"))
             .map_err(|e| format!("cannot load dictionaries from {}: {e}", dir.display()))?;
-        let map = {
-            let connection = X11SessionConnection::connect()?;
-            build_layout_map(&connection, source)?
-        };
-
         let stop = Arc::new(AtomicBool::new(false));
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
         let thread_stop = Arc::clone(&stop);
@@ -395,6 +374,8 @@ impl Service {
         let handle = thread::spawn(move || {
             let setup = || -> Result<(X11SessionConnection, ComposedTypingSession), String> {
                 let connection = X11SessionConnection::connect()?;
+                // Validate the map on the same connection the worker will use.
+                connection.layout_map(source)?;
                 let compose = ComposeProcessor::new(&locale())
                     .or_else(|_| ComposeProcessor::new(std::ffi::OsStr::new("en_US.UTF-8")))
                     .map_err(|e| format!("cannot initialise the Compose table: {e}"))?;
@@ -412,7 +393,6 @@ impl Service {
                 &mut session,
                 &dicts,
                 source,
-                &map,
                 |action| {
                     if let SessionAction::Suggestion(suggestion) = action {
                         notify_suggestion(&suggestion);
@@ -452,5 +432,24 @@ impl Service {
 impl Drop for Service {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+
+#[cfg(test)]
+mod privacy_tests {
+    use super::*;
+
+    #[test]
+    fn suggestion_notification_never_contains_typed_or_converted_text() {
+        let suggestion = Suggestion {
+            original: "sghl".to_owned(),
+            converted: "سلام".to_owned(),
+            source: Language::English,
+        };
+        let body = suggestion_notification_body(&suggestion);
+        assert_eq!(body, SUGGESTION_NOTIFICATION_BODY);
+        assert!(!body.contains(&suggestion.original));
+        assert!(!body.contains(&suggestion.converted));
     }
 }

@@ -10,13 +10,13 @@ The first target is KDE Plasma on X11, followed by GNOME and XFCE. Desktop detec
 
 ### X11
 
-The X11 backend provides an unprivileged connection, XI2 session-event subscriptions, XKB keymap translation, Compose/dead-key processing, focus lifecycle handling, and explicit keymap refresh.
+The X11 backend provides an unprivileged connection, XI2 session-event subscriptions, XKB keymap translation, Compose/dead-key processing, focus lifecycle handling, and keymap refresh. The foreground session loop also rebuilds its English/Persian physical-key conversion map when the XKB layout groups change.
 
 The `X11SessionConnection::run_session_loop()` API is an explicitly invoked foreground loop. It subscribes to key/focus and XKB map-change events, dispatches them into `ComposedTypingSession`, and passes non-empty session actions to a callback supplied by the caller. It does not create a daemon, UI, tray icon, or automatic startup entry, and it does not inject or replace text.
 
-Automated Xvfb tests cover event delivery, layout-group/modifier snapshots, keymap refresh, lifecycle resets, and an end-to-end English-to-Persian suggestion path. These tests do not replace validation in a real KDE/X11 desktop session. Key-repeat behavior, custom server keymaps, and broader hardware/layout combinations still require validation.
+Automated Xvfb tests cover raw-event master/source device identity, device-event modifier/group snapshots, keymap refresh including conversion-map rebuilding, lifecycle resets, and an end-to-end English-to-Persian suggestion path. These tests do not replace validation in a real KDE/X11 desktop session. Key-repeat behavior, custom server keymaps, and broader hardware/layout combinations still require validation.
 
-X11 event visibility is server-wide. It offers neither strong per-application isolation nor reliable password-field detection. The session loop must remain an explicit user action and must not be described as secure-input-aware.
+X11 event visibility is server-wide. It offers neither strong per-application isolation nor reliable password-field detection. The combined raw-event path queries the current XKB state of the event's master keyboard because XI2 raw events carry no modifier/group snapshot; that query is not timestamped and can race with rapidly queued input. The separate device-event path carries event-time snapshots but may not propagate while another client owns focus. The session loop must remain an explicit user action and must not be described as secure-input-aware.
 
 ### Wayland
 
@@ -36,7 +36,7 @@ Input-method support depends on the active input method and on applications acce
 
 ## Implementation status
 
-Implemented: shared English/Persian detection; backend-neutral typing and Compose state; X11/XInput2 event delivery; XKB translation using server-supplied modifier/group snapshots; key classification; focus and keymap-change handling; and a callback-driven foreground session loop.
+Implemented: shared English/Persian detection; backend-neutral typing and Compose state; X11/XInput2 event delivery; XKB translation; focus and keymap-change handling; conversion-map rebuilding after layout changes; and a callback-driven foreground session loop. Raw-event modifier/group state remains a post-event master-keyboard query rather than an event-time snapshot.
 
 Not implemented: tray/menu UI, Wayland/IBus, and Fcitx5. Selected-text replacement uses clipboard + Shift+Insert and is only lightly tested across applications. Suggestions are shown as desktop notifications by the foreground `typefix` binary.
 
@@ -59,7 +59,7 @@ CI (`linux-ui-preview.yml`) starts the window under Xvfb for the four theme/lang
 - **Shortcut mode (default).** `hotkey.rs` passively grabs one configurable key combination (default `Ctrl+Alt+Space`, set with `--shortcut` or `~/.config/typefix/config`, parsed by `shortcut.rs`/`config.rs`). On a press it waits for the modifiers to be released, reads the PRIMARY selection (`arboard`), converts it with `convert.rs` (direction detected from the text, layout maps built from the active XKB groups: `us` or the first non-`ir` layout, and `ir`), puts the result on PRIMARY and CLIPBOARD, sends one synthetic Shift+Insert through XTest, and restores the previous clipboard text.
 - **Suggestion mode (`--suggest`, off by default).** Runs `X11SessionConnection::run_session_loop()` on a separate connection and shows each suggestion with `notify-send` (falling back to the terminal). `--source en|fa` selects the direction; dictionaries are found via `--data-dir`, `TYPEFIX_DATA_DIR`, `../share/typefix` next to the binary (AppImage), `/usr/share/typefix`, or the repository's `Resources/`.
 
-Selected and suggested text is kept in memory only. Suggestion text is handed to `notify-send` and thus to the desktop notification service, which may retain it; see [SECURITY.md](SECURITY.md).
+Typed and converted text remains in the in-memory session. Suggestion notifications contain only a generic mismatch warning; the original and converted words are never passed to `notify-send`. See [SECURITY.md](SECURITY.md).
 
 ## Release artifacts
 

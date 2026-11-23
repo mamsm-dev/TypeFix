@@ -8,11 +8,11 @@ TypeFix detects likely English ⇄ Persian keyboard-layout mistakes on Linux and
 
 - Shared English/Persian word detection and conversion core.
 - Backend-neutral typing-session state machine and coordinated Compose/dead-key lifecycle.
-- X11/XInput2 event observation with effective modifier and active-layout-group snapshots.
-- XKB key translation, Compose handling, focus/navigation reset handling, and keymap-change refresh.
+- X11/XInput2 event observation; XI2 device events carry event-time modifier/group snapshots, while the foreground raw-event path queries the event's master keyboard and documents its timing limitation.
+- XKB key translation, Compose handling, focus/navigation reset handling, keymap-change refresh, and rebuilding the English/Persian conversion map when layouts change.
 - Explicit foreground session loop that delivers non-empty session actions to a caller-provided callback.
 - `typefix-gui` settings window: record a new shortcut, switch typing suggestions on/off, choose theme (system/light/dark) and interface language; closing it keeps TypeFix running in the background.
-- `typefix` foreground app: a configurable global shortcut converts the selected text between the English and Persian layouts (the layout map is built from your active XKB layouts); optional `--suggest` mode shows typing suggestions with `notify-send`.
+- `typefix` foreground app: a configurable global shortcut converts the selected text between the English and Persian layouts (the layout map is built from your active XKB layouts); optional `--suggest` mode shows generic, content-free mismatch notifications.
 - Release packages (AppImage, `.deb`, `.rpm`, Arch) built by CI and published on GitHub Releases.
 - Automated Xvfb integration coverage, including an end-to-end English-to-Persian suggestion test.
 
@@ -149,7 +149,7 @@ The diagnostic prints key metadata, not typed text. Stop it with Ctrl+C. It obse
 - One synthetic Shift+Insert is sent through XTest to paste. No root service, raw evdev access, or uinput is used.
 - Session state is reset on focus changes, navigation, shortcuts, cancellation, and relevant lifecycle events.
 - X11 cannot reliably identify password fields or isolate one application from others on the same server. Disable X11 observation if that boundary is unacceptable.
-- When a suggestion is shown, the original and converted words are passed to `notify-send` and therefore to your desktop's notification service, which may keep them in its notification history. TypeFix itself does not store them.
+- Suggestion notifications contain only a generic mismatch warning. The original and converted words are never passed to `notify-send` or written to notification history; typed text remains in the in-memory session.
 - Wayland: only the conversion shortcut works (no typing suggestions), and it has not been tested on real KDE hardware yet.
 
 ## Project layout
