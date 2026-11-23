@@ -10,13 +10,13 @@ The first target is KDE Plasma on X11, followed by GNOME and XFCE. Desktop detec
 
 ### X11
 
-The X11 backend provides an unprivileged connection, XI2 session-event subscriptions, XKB keymap translation, Compose/dead-key processing, focus lifecycle handling, and explicit keymap refresh.
+The X11 backend provides an unprivileged connection, XI2 session-event subscriptions, XKB keymap translation, Compose/dead-key processing, focus lifecycle handling, and keymap refresh. The foreground session loop also rebuilds its English/Persian physical-key conversion map when the XKB layout groups change.
 
 The `X11SessionConnection::run_session_loop()` API is an explicitly invoked foreground loop. It subscribes to key/focus and XKB map-change events, dispatches them into `ComposedTypingSession`, and passes non-empty session actions to a callback supplied by the caller. It does not create a daemon, UI, tray icon, or automatic startup entry, and it does not inject or replace text.
 
-Automated Xvfb tests cover event delivery, layout-group/modifier snapshots, keymap refresh, lifecycle resets, and an end-to-end English-to-Persian suggestion path. These tests do not replace validation in a real KDE/X11 desktop session. Key-repeat behavior, custom server keymaps, and broader hardware/layout combinations still require validation.
+Automated Xvfb tests cover raw-event master/source device identity, device-event modifier/group snapshots, keymap refresh including conversion-map rebuilding, lifecycle resets, and an end-to-end English-to-Persian suggestion path. These tests do not replace validation in a real KDE/X11 desktop session. Key-repeat behavior, custom server keymaps, and broader hardware/layout combinations still require validation.
 
-X11 event visibility is server-wide. It offers neither strong per-application isolation nor reliable password-field detection. The session loop must remain an explicit user action and must not be described as secure-input-aware.
+X11 event visibility is server-wide. It offers neither strong per-application isolation nor reliable password-field detection. The combined raw-event path queries the current XKB state of the event's master keyboard because XI2 raw events carry no modifier/group snapshot; that query is not timestamped and can race with rapidly queued input. The separate device-event path carries event-time snapshots but may not propagate while another client owns focus. The session loop must remain an explicit user action and must not be described as secure-input-aware.
 
 ### Wayland
 
@@ -36,7 +36,7 @@ Input-method support depends on the active input method and on applications acce
 
 ## Implementation status
 
-Implemented: shared English/Persian detection; backend-neutral typing and Compose state; X11/XInput2 event delivery; XKB translation using server-supplied modifier/group snapshots; key classification; focus and keymap-change handling; and a callback-driven foreground session loop.
+Implemented: shared English/Persian detection; backend-neutral typing and Compose state; X11/XInput2 event delivery; XKB translation; focus and keymap-change handling; conversion-map rebuilding after layout changes; and a callback-driven foreground session loop. Raw-event modifier/group state remains a post-event master-keyboard query rather than an event-time snapshot.
 
 Not implemented: tray/menu UI, Wayland/IBus, and Fcitx5. Selected-text replacement uses clipboard + Shift+Insert and is only lightly tested across applications. Suggestions are shown as desktop notifications by the foreground `typefix` binary.
 
