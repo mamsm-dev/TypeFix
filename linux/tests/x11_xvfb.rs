@@ -596,7 +596,6 @@ fn x11_xvfb_session_dispatch_produces_persian_layout_suggestion() {
         .expect("setxkbmap installed");
     assert!(layout.success(), "could not set deterministic US/Persian layout");
     wait_for_layouts(&["us", "ir"]);
-    wait_for_layouts(&["us", "ir"]);
 
     let root_dir = std::env::temp_dir().join(format!("typefix-x11-e2e-{}", std::process::id()));
     std::fs::create_dir_all(&root_dir).unwrap();
@@ -673,6 +672,7 @@ fn x11_foreground_session_loop_reports_suggestion_to_callback() {
         .status()
         .expect("setxkbmap installed");
     assert!(layout.success(), "could not set deterministic US/Persian layout");
+    wait_for_layouts(&["us", "ir"]);
 
     let root_dir = std::env::temp_dir().join(format!("typefix-x11-loop-{}", std::process::id()));
     std::fs::create_dir_all(&root_dir).unwrap();
@@ -734,6 +734,7 @@ fn x11_xvfb_session_loop_preserves_repeated_key_presses() {
         .status()
         .expect("setxkbmap installed");
     assert!(layout.success(), "could not set deterministic US/Persian layout");
+    wait_for_layouts(&["us", "ir"]);
 
     let root_dir = std::env::temp_dir().join(format!("typefix-x11-repeat-{}", std::process::id()));
     std::fs::create_dir_all(&root_dir).unwrap();
