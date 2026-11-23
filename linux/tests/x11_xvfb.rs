@@ -634,7 +634,7 @@ fn x11_foreground_session_loop_reports_suggestion_to_callback() {
     use typefix_core::{
         compose::ComposeProcessor,
         session::{ComposedTypingSession, SessionAction},
-        Dictionaries, Language, LayoutMap, Suggestion,
+        Dictionaries, Language, Suggestion,
     };
     use typefix_core::x11::X11SessionConnection;
 
@@ -649,10 +649,6 @@ fn x11_foreground_session_loop_reports_suggestion_to_callback() {
     std::fs::write(root_dir.join("en"), "hello\nworld\nwant\n").unwrap();
     std::fs::write(root_dir.join("fa"), "سلام\nدنیا\n").unwrap();
     let dicts = Dictionaries::load(root_dir.join("en"), root_dir.join("fa")).unwrap();
-    let mut map = LayoutMap::default();
-    for (from, to) in [('s', "س"), ('g', "ل"), ('h', "ا"), ('l', "م")] {
-        map.insert(from, to);
-    }
     let compose = ComposeProcessor::new(std::ffi::OsStr::new("en_US.UTF-8"))
         .expect("system Compose table is available in CI");
     let mut typing = ComposedTypingSession::new(compose);
@@ -676,7 +672,6 @@ fn x11_foreground_session_loop_reports_suggestion_to_callback() {
         &mut typing,
         &dicts,
         Language::English,
-        &map,
         move |action| {
             if let SessionAction::Suggestion(suggestion) = action {
                 *callback_result.lock().unwrap() = Some(suggestion);
@@ -700,7 +695,7 @@ fn x11_xvfb_session_loop_preserves_repeated_key_presses() {
     use typefix_core::{
         compose::ComposeProcessor,
         session::{ComposedTypingSession, SessionAction},
-        Dictionaries, Language, LayoutMap, Suggestion,
+        Dictionaries, Language, Suggestion,
     };
     use typefix_core::x11::X11SessionConnection;
 
@@ -715,10 +710,6 @@ fn x11_xvfb_session_loop_preserves_repeated_key_presses() {
     std::fs::write(root_dir.join("en"), "hello\nworld\nwant\n").unwrap();
     std::fs::write(root_dir.join("fa"), "سلام\nسسلام\nدنیا\n").unwrap();
     let dicts = Dictionaries::load(root_dir.join("en"), root_dir.join("fa")).unwrap();
-    let mut map = LayoutMap::default();
-    for (from, to) in [('s', "س"), ('g', "ل"), ('h', "ا"), ('l', "م")] {
-        map.insert(from, to);
-    }
     let compose = ComposeProcessor::new(std::ffi::OsStr::new("en_US.UTF-8"))
         .expect("system Compose table is available in CI");
     let mut typing = ComposedTypingSession::new(compose);
@@ -748,7 +739,6 @@ fn x11_xvfb_session_loop_preserves_repeated_key_presses() {
         &mut typing,
         &dicts,
         Language::English,
-        &map,
         move |action| {
             if let SessionAction::Suggestion(suggestion) = action {
                 *callback_result.lock().unwrap() = Some(suggestion);
