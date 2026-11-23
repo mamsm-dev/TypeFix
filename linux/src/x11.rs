@@ -646,7 +646,6 @@ impl X11SessionConnection {
         session: &mut crate::session::ComposedTypingSession,
         dicts: &crate::Dictionaries,
         source: crate::Language,
-        map: &crate::LayoutMap,
         mut on_action: OnAction,
         mut should_stop: ShouldStop,
     ) -> Result<(), String>
@@ -656,7 +655,10 @@ impl X11SessionConnection {
     {
         self.subscribe_session_events()?;
         self.subscribe_xkb_map_events()?;
-        let mut active_map = map.clone();
+        // Build from this connection's keymap, not from a map created on a
+        // different connection before the worker started. This closes the
+        // startup race where the user's layout changes between those steps.
+        let mut active_map = self.layout_map(source)?;
 
         while !should_stop() {
             if let Some(event) = self.poll_for_session_event()? {
