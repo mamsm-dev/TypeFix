@@ -28,6 +28,32 @@ fn run_xdotool(args: &[&str]) {
     assert!(status.success(), "xdotool command failed: {args:?}");
 }
 
+fn wait_for_layouts(expected: &[&str]) {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut last = String::new();
+    while Instant::now() < deadline {
+        let output = Command::new("setxkbmap")
+            .arg("-query")
+            .output()
+            .expect("setxkbmap installed");
+        last = String::from_utf8_lossy(&output.stdout).into_owned();
+        let layouts = last
+            .lines()
+            .find_map(|line| {
+                let (key, value) = line.split_once(':')?;
+                (key.trim() == "layout").then(|| {
+                    value.split(',').map(str::trim).collect::<Vec<_>>()
+                })
+            })
+            .unwrap_or_default();
+        if layouts == expected {
+            return;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    panic!("XKB layouts did not settle to {expected:?}; last setxkbmap -query output: {last}");
+}
+
 #[test]
 fn xvfb_delivers_xi2_device_key_events_and_tracks_layout_group_switch() {
     let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -436,6 +462,7 @@ fn x11_keymap_change_rebuilds_the_session_conversion_map() {
         .status()
         .expect("setxkbmap installed");
     assert!(initial.success(), "could not set initial US/Persian keymap");
+    wait_for_layouts(&["us", "ir"]);
 
     let mut connection = X11SessionConnection::connect().expect("connect X11 session API");
     connection.subscribe_xkb_map_events().expect("subscribe to XKB map changes");
@@ -451,6 +478,7 @@ fn x11_keymap_change_rebuilds_the_session_conversion_map() {
         .status()
         .expect("setxkbmap installed");
     assert!(changed.success(), "could not change to German/Persian keymap");
+    wait_for_layouts(&["de", "ir"]);
 
     let root = std::env::temp_dir().join(format!("typefix-x11-map-refresh-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
@@ -567,6 +595,8 @@ fn x11_xvfb_session_dispatch_produces_persian_layout_suggestion() {
         .status()
         .expect("setxkbmap installed");
     assert!(layout.success(), "could not set deterministic US/Persian layout");
+    wait_for_layouts(&["us", "ir"]);
+    wait_for_layouts(&["us", "ir"]);
 
     let root_dir = std::env::temp_dir().join(format!("typefix-x11-e2e-{}", std::process::id()));
     std::fs::create_dir_all(&root_dir).unwrap();
