@@ -376,8 +376,7 @@ fn x11_session_api_sees_keys_while_a_client_window_has_focus() {
     assert_ne!(key.source_id, 0, "raw XI2 event must preserve its source keyboard ID");
     assert_ne!(key.device_id, key.source_id, "master and source keyboard IDs must not be conflated");
 
-    let state = session
-        .connection
+    let state = client
         .xkb_get_state(key.device_id.into())
         .unwrap()
         .reply()
@@ -454,8 +453,8 @@ fn x11_keymap_change_rebuilds_the_session_conversion_map() {
 
     let root = std::env::temp_dir().join(format!("typefix-x11-map-refresh-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(root.join("en"), "hello\\nworld\\n").unwrap();
-    std::fs::write(root.join("fa"), "سلام\\nدنیا\\n").unwrap();
+    std::fs::write(root.join("en"), "hello\nworld\n").unwrap();
+    std::fs::write(root.join("fa"), "سلام\nدنیا\n").unwrap();
     let dicts = Dictionaries::load(root.join("en"), root.join("fa")).unwrap();
     let compose = ComposeProcessor::new(std::ffi::OsStr::new("en_US.UTF-8"))
         .expect("system Compose table is available in CI");
