@@ -37,7 +37,7 @@ pub fn build_layout_map(
     connection: &X11SessionConnection,
     source: Language,
 ) -> Result<LayoutMap, String> {
-    build_layout_map_from(&connection.keymap, &connection.config.layouts, source)
+    connection.layout_map(source)
 }
 
 /// Same as [`build_layout_map`] but from any compiled keymap, so it also works
@@ -47,36 +47,12 @@ pub fn build_layout_map_from(
     layouts: &[String],
     source: Language,
 ) -> Result<LayoutMap, String> {
-    let persian = layouts
-        .iter()
-        .position(|name| name == "ir")
-        .ok_or_else(|| "no Persian (ir) keyboard layout is configured; add one in your desktop keyboard settings".to_owned())?;
-    let english = layouts
-        .iter()
-        .position(|name| name == "us")
-        .or_else(|| layouts.iter().position(|name| name != "ir"))
-        .ok_or_else(|| "no English keyboard layout is configured".to_owned())?;
-
+    let (english, persian) = crate::x11::english_persian_groups(layouts)?;
     let (from_group, to_group) = match source {
-        Language::English => (english as u32, persian as u32),
-        Language::Persian => (persian as u32, english as u32),
+        Language::English => (english, persian),
+        Language::Persian => (persian, english),
     };
-
-    let mut map = LayoutMap::default();
-    let mut seen = std::collections::HashSet::new();
-    for modifiers in [0u32, 1u32] {
-        for keycode in 8u8..=255u8 {
-            let from = keymap.translate_keycode(keycode, from_group, modifiers);
-            let to = keymap.translate_keycode(keycode, to_group, modifiers);
-            let (Some(from), Some(to)) = (from, to) else { continue };
-            let mut chars = from.chars();
-            let (Some(ch), None) = (chars.next(), chars.next()) else { continue };
-            if seen.insert(ch) {
-                map.insert(ch, to);
-            }
-        }
-    }
-    Ok(map)
+    keymap.layout_map(from_group, to_group)
 }
 
 /// Layout tables for a Wayland session. The compositor does not expose its
