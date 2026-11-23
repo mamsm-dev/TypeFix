@@ -8,7 +8,7 @@ X11 event observation is explicit opt-in and runs in the foreground. The session
 
 This is not isolated to one application: events may be visible across applications on the same X server. X11 does not provide reliable password-field detection or strong per-application isolation. Users who require strict isolation should not enable the X11 session loop.
 
-The `typefix` app passes each suggestion (the typed word and its conversion) to `notify-send`, i.e. to another local process and your desktop's notification service. That service may display it in a history or log it; TypeFix does not control this. If that is unacceptable, run the core without the notification frontend or disable notification history.
+Suggestion notifications contain only a generic English/Persian layout-mismatch warning. The original and converted words are never passed to `notify-send` or the desktop notification service, so notification history cannot retain typed content.
 
 Shortcut mode (the default of the `typefix` app) passively grabs only the one configured key combination; it does not observe other keystrokes. When the shortcut is pressed it reads the selected text from the X selection, converts it in memory, temporarily replaces the clipboard/selection with the result, and sends a single synthetic Shift+Insert through XTest to paste it, then restores the previous clipboard text. Other programs that monitor the clipboard can observe the converted text during that moment. No uinput or raw device access is used.
 
