@@ -59,7 +59,7 @@ CI (`linux-ui-preview.yml`) starts the window under Xvfb for the four theme/lang
 - **Shortcut mode (default).** `hotkey.rs` passively grabs one configurable key combination (default `Ctrl+Alt+Space`, set with `--shortcut` or `~/.config/typefix/config`, parsed by `shortcut.rs`/`config.rs`). On a press it waits for the modifiers to be released, reads the PRIMARY selection (`arboard`), converts it with `convert.rs` (direction detected from the text, layout maps built from the active XKB groups: `us` or the first non-`ir` layout, and `ir`), puts the result on PRIMARY and CLIPBOARD, sends one synthetic Shift+Insert through XTest, and restores the previous clipboard text.
 - **Suggestion mode (`--suggest`, off by default).** Runs `X11SessionConnection::run_session_loop()` on a separate connection and shows each suggestion with `notify-send` (falling back to the terminal). `--source en|fa` selects the direction; dictionaries are found via `--data-dir`, `TYPEFIX_DATA_DIR`, `../share/typefix` next to the binary (AppImage), `/usr/share/typefix`, or the repository's `Resources/`.
 
-Selected and suggested text is kept in memory only. Suggestion text is handed to `notify-send` and thus to the desktop notification service, which may retain it; see [SECURITY.md](SECURITY.md).
+Typed and converted text remains in the in-memory session. Suggestion notifications contain only a generic mismatch warning; the original and converted words are never passed to `notify-send`. See [SECURITY.md](SECURITY.md).
 
 ## Release artifacts
 
