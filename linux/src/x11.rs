@@ -29,7 +29,9 @@ pub fn english_persian_groups(layouts: &[String]) -> Result<(u32, u32), String> 
     let persian = layouts
         .iter()
         .position(|name| name == "ir")
-        .ok_or_else(|| "no Persian (ir) keyboard layout is configured; add one in your desktop keyboard settings".to_owned())?;
+        .ok_or_else(|| format!(
+            "no Persian (ir) keyboard layout is configured; reported XKB layouts: {layouts:?}"
+        ))?;
     let english = layouts
         .iter()
         .position(|name| name == "us")
