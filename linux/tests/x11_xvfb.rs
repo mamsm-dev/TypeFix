@@ -376,6 +376,7 @@ fn x11_session_api_sees_keys_while_a_client_window_has_focus() {
     assert_ne!(key.source_id, 0, "raw XI2 event must preserve its source keyboard ID");
     assert_ne!(key.device_id, key.source_id, "master and source keyboard IDs must not be conflated");
 
+    client.xkb_use_extension(1, 0).unwrap().reply().unwrap();
     let state = client
         .xkb_get_state(key.device_id.into())
         .unwrap()
