@@ -356,11 +356,13 @@ fn x11_session_api_sees_keys_while_a_client_window_has_focus() {
     run_xdotool(&["key", "a"]);
 
     let deadline = Instant::now() + Duration::from_secs(3);
-    let mut observed_key_press = false;
-    while Instant::now() < deadline && !observed_key_press {
+    let mut observed_key = None;
+    while Instant::now() < deadline && observed_key.is_none() {
         if let Some(event) = session.poll_for_session_event().expect("poll key event") {
             if let X11SessionEvent::Key(key) = event {
-                observed_key_press = key.pressed && key.keycode == 38 && key.effective_group == 0;
+                if key.pressed && key.keycode == 38 && key.effective_group == 0 {
+                    observed_key = Some(key);
+                }
             }
         } else {
             thread::sleep(Duration::from_millis(10));
@@ -369,7 +371,18 @@ fn x11_session_api_sees_keys_while_a_client_window_has_focus() {
 
     client.destroy_window(app_window).unwrap().check().unwrap();
     client.flush().unwrap();
-    assert!(observed_key_press, "session API did not see a key press delivered to a focused client window");
+    let key = observed_key.expect("session API did not see a key press delivered to a focused client window");
+    assert_ne!(key.device_id, 0, "raw XI2 event must identify its master keyboard");
+    assert_ne!(key.source_id, 0, "raw XI2 event must preserve its source keyboard ID");
+    assert_ne!(key.device_id, key.source_id, "master and source keyboard IDs must not be conflated");
+
+    let state = session
+        .connection
+        .xkb_get_state(key.device_id.into())
+        .unwrap()
+        .reply()
+        .unwrap();
+    assert_eq!(u8::from(state.group), key.effective_group, "effective group must come from the event's master keyboard");
 }
 
 #[test]
@@ -406,6 +419,77 @@ fn xkb_map_notifications_allow_keymap_refresh() {
     assert!(observed_map_change, "XKB map change notification was not delivered");
     session.refresh_keymap().expect("refresh compiled XKB keymap");
     assert_eq!(session.keymap.layout_count(), 2);
+}
+
+#[test]
+fn x11_keymap_change_rebuilds_the_session_conversion_map() {
+    let _guard = X11_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    use typefix_core::{
+        compose::ComposeProcessor,
+        session::ComposedTypingSession,
+        x11::{X11SessionConnection, X11SessionEvent},
+        Dictionaries, Language,
+    };
+
+    let initial = Command::new("setxkbmap")
+        .args(["-layout", "us,ir", "-option", ""])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(initial.success(), "could not set initial US/Persian keymap");
+
+    let mut connection = X11SessionConnection::connect().expect("connect X11 session API");
+    connection.subscribe_xkb_map_events().expect("subscribe to XKB map changes");
+    let mut map = connection.layout_map(Language::English).expect("build initial US to Persian map");
+    let persian_y_key = connection
+        .keymap
+        .translate_keycode(29, 1, 0)
+        .expect("Persian output for the physical US Y key");
+    assert_eq!(map.convert("y"), persian_y_key);
+
+    let changed = Command::new("setxkbmap")
+        .args(["-layout", "de,ir", "-option", ""])
+        .status()
+        .expect("setxkbmap installed");
+    assert!(changed.success(), "could not change to German/Persian keymap");
+
+    let root = std::env::temp_dir().join(format!("typefix-x11-map-refresh-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("en"), "hello\\nworld\\n").unwrap();
+    std::fs::write(root.join("fa"), "سلام\\nدنیا\\n").unwrap();
+    let dicts = Dictionaries::load(root.join("en"), root.join("fa")).unwrap();
+    let compose = ComposeProcessor::new(std::ffi::OsStr::new("en_US.UTF-8"))
+        .expect("system Compose table is available in CI");
+    let mut typing = ComposedTypingSession::new(compose);
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut refreshed = false;
+    while Instant::now() < deadline && !refreshed {
+        if let Some(event) = connection.poll_for_session_event().expect("poll keymap notification") {
+            if matches!(&event, X11SessionEvent::KeymapChanged(_)) {
+                connection
+                    .handle_session_event_with_map_refresh(
+                        &mut typing,
+                        event,
+                        &dicts,
+                        Language::English,
+                        &mut map,
+                    )
+                    .expect("refresh XKB translator and conversion map");
+                refreshed = true;
+            }
+        } else {
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    assert!(refreshed, "XKB map notification was not delivered");
+    assert_eq!(connection.config.layouts, vec!["de", "ir"]);
+    assert_eq!(
+        map.convert("z"),
+        persian_y_key,
+        "the new German Z key must map to the same physical Persian key as US Y"
+    );
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
