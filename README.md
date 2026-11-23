@@ -8,8 +8,8 @@ TypeFix detects likely English ⇄ Persian keyboard-layout mistakes on Linux and
 
 - Shared English/Persian word detection and conversion core.
 - Backend-neutral typing-session state machine and coordinated Compose/dead-key lifecycle.
-- X11/XInput2 event observation with effective modifier and active-layout-group snapshots.
-- XKB key translation, Compose handling, focus/navigation reset handling, and keymap-change refresh.
+- X11/XInput2 event observation; XI2 device events carry event-time modifier/group snapshots, while the foreground raw-event path queries the event's master keyboard and documents its timing limitation.
+- XKB key translation, Compose handling, focus/navigation reset handling, keymap-change refresh, and rebuilding the English/Persian conversion map when layouts change.
 - Explicit foreground session loop that delivers non-empty session actions to a caller-provided callback.
 - `typefix-gui` settings window: record a new shortcut, switch typing suggestions on/off, choose theme (system/light/dark) and interface language; closing it keeps TypeFix running in the background.
 - `typefix` foreground app: a configurable global shortcut converts the selected text between the English and Persian layouts (the layout map is built from your active XKB layouts); optional `--suggest` mode shows typing suggestions with `notify-send`.
