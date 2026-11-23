@@ -11,12 +11,12 @@ The X11 connection exposes explicit observation APIs:
 - `subscribe_raw_key_events()` / `wait_for_raw_key_event()`: raw keycode and event metadata only.
 - `subscribe_key_events()` / `wait_for_key_event()`: key events with server-supplied effective modifier and active-group snapshots, plus master/source device IDs and timestamps.
 - `subscribe_focus_events()`: focus-in/focus-out metadata.
-- `subscribe_session_events()` with `poll_for_session_event()` or `wait_for_session_event()`: combined key and focus stream. Keys are observed through XI2 raw key events, which are delivered whatever window has focus (non-raw root selections are not delivered while a client window selecting key events has focus); the effective modifier/group state is queried from XKB for each key press. Prefer this combined subscription because XI2 selections are per device/window.
+- `subscribe_session_events()` with `poll_for_session_event()` or `wait_for_session_event()`: combined key and focus stream. Keys are observed through XI2 raw events, which are delivered whatever window has focus. Because raw events carry no modifier/group snapshot, the current XKB state is queried for the event's master keyboard and the source keyboard ID is preserved. This query is not timestamped and can race with later queued input; the separate device-event API carries a true event-time snapshot but may not propagate while another client owns focus.
 - `subscribe_xkb_map_events()`: XKB map/new-keyboard notifications. On change, session state is reset and `refresh_keymap()` rebuilds the keymap translator from the current XKB RMLVO settings.
 
-`XkbKeymap::session_event_for_key()` translates a key press using its event-time modifier/group snapshot and maps the result to a session event (text/Compose, Space, Backspace, Tab, navigation, or shortcut). Key releases do not produce text.
+`XkbKeymap::session_event_for_key()` translates a key press using the supplied modifier/group state and maps the result to a session event (text/Compose, Space, Backspace, Tab, navigation, or shortcut). The device-event API supplies an event-time snapshot; the foreground raw-event path supplies a per-master XKB state query with the race limitation described above. Key releases do not produce text.
 
-`X11SessionConnection::handle_session_event()` dispatches one X11 event into `ComposedTypingSession`. `X11SessionConnection::run_session_loop()` provides the explicit foreground loop: it enables the required subscriptions, dispatches events, and invokes a caller-provided callback for non-empty `SessionAction` values until the caller's stop predicate requests termination.
+`X11SessionConnection::handle_session_event()` dispatches one X11 event into `ComposedTypingSession` and refreshes the compiled translator after a keymap notification. `handle_session_event_with_map_refresh()` additionally rebuilds the caller's English/Persian conversion map from the refreshed layout groups. `run_session_loop()` keeps a private active map and uses that refresh-aware dispatcher, so subsequent suggestions do not continue using a stale map after a layout change.
 
 No observer is enabled by the probe or silently at application startup. The foreground loop is opt-in. It does not grab or consume application input, log typed text, or inject replacements (the separate shortcut mode in `hotkey.rs` grabs one key combination and sends one paste keystroke). The diagnostic binary `typefix-x11-events` reports metadata only and should be used only during an intentional test.
 
@@ -45,6 +45,6 @@ A complete desktop application must:
 
 ## Current limitations
 
-X11 clients with access to the same server do not have strong per-application input isolation. Reliable password-field detection must not be claimed. Custom server-side keymap modifications may not be represented exactly by rebuilding from RMLVO settings. Automated Xvfb tests are not a substitute for real KDE/X11 validation.
+X11 clients with access to the same server do not have strong per-application input isolation. Reliable password-field detection must not be claimed. Custom server-side keymap modifications may not be represented exactly by rebuilding from RMLVO settings. The raw-event path's post-event XKB state query can race with rapid queued input; it is not equivalent to XI2's event-time device snapshot. Automated Xvfb tests are not a substitute for real KDE/X11 validation.
 
 The real desktop smoke test remains pending. A tray/menu UI, safe replacement, Wayland/IBus, and Fcitx5 are not implemented; the `typefix` app only shows notifications.
