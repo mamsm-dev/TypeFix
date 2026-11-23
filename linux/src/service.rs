@@ -114,9 +114,17 @@ pub fn notify(title: &str, body: &str) {
     }
 }
 
+const SUGGESTION_NOTIFICATION_BODY: &str =
+    "Possible English/Persian layout mismatch. Select the text and use your TypeFix shortcut to convert it.";
+
+fn suggestion_notification_body(_suggestion: &Suggestion) -> &'static str {
+    // Never pass the typed word or converted text to the desktop notification
+    // service; notification history is outside TypeFix's control.
+    SUGGESTION_NOTIFICATION_BODY
+}
+
 fn notify_suggestion(suggestion: &Suggestion) {
-    let body = format!("{}  \u{2192}  {}", suggestion.original, suggestion.converted);
-    notify("TypeFix", &body);
+    notify("TypeFix", suggestion_notification_body(suggestion));
 }
 
 /// Finds the directory holding `en_50k.txt` and `fa_50k.txt`.
@@ -424,5 +432,24 @@ impl Service {
 impl Drop for Service {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+
+#[cfg(test)]
+mod privacy_tests {
+    use super::*;
+
+    #[test]
+    fn suggestion_notification_never_contains_typed_or_converted_text() {
+        let suggestion = Suggestion {
+            original: "sghl".to_owned(),
+            converted: "سلام".to_owned(),
+            source: Language::English,
+        };
+        let body = suggestion_notification_body(&suggestion);
+        assert_eq!(body, SUGGESTION_NOTIFICATION_BODY);
+        assert!(!body.contains(&suggestion.original));
+        assert!(!body.contains(&suggestion.converted));
     }
 }
