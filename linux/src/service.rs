@@ -359,11 +359,6 @@ impl Service {
             .ok_or("cannot find en_50k.txt and fa_50k.txt; set TYPEFIX_DATA_DIR")?;
         let dicts = Dictionaries::load(dir.join("en_50k.txt"), dir.join("fa_50k.txt"))
             .map_err(|e| format!("cannot load dictionaries from {}: {e}", dir.display()))?;
-        let map = {
-            let connection = X11SessionConnection::connect()?;
-            build_layout_map(&connection, source)?
-        };
-
         let stop = Arc::new(AtomicBool::new(false));
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
         let thread_stop = Arc::clone(&stop);
@@ -371,6 +366,8 @@ impl Service {
         let handle = thread::spawn(move || {
             let setup = || -> Result<(X11SessionConnection, ComposedTypingSession), String> {
                 let connection = X11SessionConnection::connect()?;
+                // Validate the map on the same connection the worker will use.
+                connection.layout_map(source)?;
                 let compose = ComposeProcessor::new(&locale())
                     .or_else(|_| ComposeProcessor::new(std::ffi::OsStr::new("en_US.UTF-8")))
                     .map_err(|e| format!("cannot initialise the Compose table: {e}"))?;
@@ -388,7 +385,6 @@ impl Service {
                 &mut session,
                 &dicts,
                 source,
-                &map,
                 |action| {
                     if let SessionAction::Suggestion(suggestion) = action {
                         notify_suggestion(&suggestion);
